@@ -5,12 +5,13 @@ CREATE TABLE public.alokasi_dosen (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   mk_id uuid,
   dosen_id uuid,
-  pendaftaran_id uuid,
   tahun_akademik text,
   created_at timestamp with time zone DEFAULT now(),
+  pendaftaran_id uuid,
   CONSTRAINT alokasi_dosen_pkey PRIMARY KEY (id),
   CONSTRAINT alokasi_dosen_mk_id_fkey FOREIGN KEY (mk_id) REFERENCES public.mata_kuliah(id),
-  CONSTRAINT alokasi_dosen_dosen_id_fkey FOREIGN KEY (dosen_id) REFERENCES public.users(id)
+  CONSTRAINT alokasi_dosen_dosen_id_fkey FOREIGN KEY (dosen_id) REFERENCES public.users(id),
+  CONSTRAINT alokasi_dosen_pendaftaran_id_fkey FOREIGN KEY (pendaftaran_id) REFERENCES public.pendaftaran_sa(id)
 );
 CREATE TABLE public.dosen (
   id uuid NOT NULL,
@@ -87,6 +88,12 @@ CREATE TABLE public.pendaftaran_sa (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT pendaftaran_sa_pkey PRIMARY KEY (id),
   CONSTRAINT pendaftaran_sa_mahasiswa_id_fkey FOREIGN KEY (mahasiswa_id) REFERENCES public.mahasiswa(id)
+);
+CREATE TABLE public.pengaturan (
+  key text NOT NULL,
+  value text NOT NULL,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT pengaturan_pkey PRIMARY KEY (key)
 );
 CREATE TABLE public.pengumpulan_tugas (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
