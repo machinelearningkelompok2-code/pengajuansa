@@ -11,21 +11,19 @@ function getCurrentSemesterPeriod() {
   const year = now.getFullYear();
   const month = now.getMonth() + 1; // 1-12
 
-  // Semester Genap: Februari - Juli
-  // Semester Ganjil: Agustus - Januari
-  if (month >= 2 && month <= 7) {
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
     return {
       label: `Genap ${year - 1}/${year}`,
-      start: new Date(year, 1, 1), // 1 Feb
-      end: new Date(year, 6, 31, 23, 59, 59), // 31 Jul
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
     };
   } else {
-    // Aug-Dec = same year, Jan = previous cycle
-    const startYear = month >= 8 ? year : year - 1;
     return {
-      label: `Ganjil ${startYear}/${startYear + 1}`,
-      start: new Date(startYear, 7, 1), // 1 Aug
-      end: new Date(startYear + 1, 0, 31, 23, 59, 59), // 31 Jan
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
     };
   }
 }
@@ -120,7 +118,7 @@ export default function PenilaianTugasDosen() {
       // Pastikan list MK unik
       const uniqueMks: any[] = [];
       const mkIds = new Set();
-      
+
       alokasi.forEach((a: any) => {
         if (a.mata_kuliah && !mkIds.has(a.mk_id)) {
           mkIds.add(a.mk_id);
@@ -146,7 +144,7 @@ export default function PenilaianTugasDosen() {
       const rawList = data.map((d: any) => {
         const mhs = (d.pendaftaran_sa as any)?.mahasiswa;
         if (mhs) {
-           return { ...mhs, pendaftaran_item_id: d.id, nilai_akhir: d.nilai_akhir };
+          return { ...mhs, pendaftaran_item_id: d.id, nilai_akhir: d.nilai_akhir };
         }
         return null;
       }).filter(Boolean);
@@ -215,11 +213,11 @@ export default function PenilaianTugasDosen() {
       fetchTugasMahasiswa(selectedMhs.id, selectedMK);
     } else {
       Swal.fire({
-      title: 'Gagal',
-      text: "Gagal: " + (taskError?.message || "Error tidak diketahui"),
-      icon: 'error',
-      confirmButtonColor: '#1A365D'
-    });
+        title: 'Gagal',
+        text: "Gagal: " + (taskError?.message || "Error tidak diketahui"),
+        icon: 'error',
+        confirmButtonColor: '#1A365D'
+      });
     }
   };
 
@@ -277,11 +275,11 @@ export default function PenilaianTugasDosen() {
       fetchTugasMahasiswa(mhsId, selectedMK);
     } else {
       Swal.fire({
-      title: 'Gagal',
-      text: "Gagal memperbarui nilai: " + error.message,
-      icon: 'error',
-      confirmButtonColor: '#1A365D'
-    });
+        title: 'Gagal',
+        text: "Gagal memperbarui nilai: " + error.message,
+        icon: 'error',
+        confirmButtonColor: '#1A365D'
+      });
     }
   };
 
@@ -407,56 +405,56 @@ export default function PenilaianTugasDosen() {
 
           {/* ── DESKTOP: Table (hidden on mobile) ── */}
           <div className="hidden md:block">
-          <table className="w-full min-w-[480px] text-left">
-            <thead>
-              <tr className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 bg-gray-50/50">
-                <th className="px-6 py-5">MAHASISWA</th>
-                <th className="px-6 py-5">PROGRAM STUDI</th>
-                <th className="px-6 py-5 text-center">STATUS</th>
-                <th className="px-6 py-5 text-right">AKSI MANAJEMEN</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {mhsList.length > 0 ? mhsList.map((mhs, index) => {
-                const color = getRandomColorClass(index);
-                return (
-                  <tr key={`d-${mhs.id}-${index}`} className="transition-all hover:bg-blue-50/30 group">
-                    <td className="px-6 py-6">
-                      <div className="flex items-center gap-4">
-                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] font-black text-sm shadow-sm ${color.bg} ${color.text} border border-white/50`}>
-                          {getInitials(mhs.nama_mahasiswa)}
+            <table className="w-full min-w-[480px] text-left">
+              <thead>
+                <tr className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 bg-gray-50/50">
+                  <th className="px-6 py-5">MAHASISWA</th>
+                  <th className="px-6 py-5">PROGRAM STUDI</th>
+                  <th className="px-6 py-5 text-center">STATUS</th>
+                  <th className="px-6 py-5 text-right">AKSI MANAJEMEN</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {mhsList.length > 0 ? mhsList.map((mhs, index) => {
+                  const color = getRandomColorClass(index);
+                  return (
+                    <tr key={`d-${mhs.id}-${index}`} className="transition-all hover:bg-blue-50/30 group">
+                      <td className="px-6 py-6">
+                        <div className="flex items-center gap-4">
+                          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] font-black text-sm shadow-sm ${color.bg} ${color.text} border border-white/50`}>
+                            {getInitials(mhs.nama_mahasiswa)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-900 group-hover:text-blue-900 transition-colors line-clamp-1">{mhs.nama_mahasiswa}</p>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{mhs.nim}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-gray-900 group-hover:text-blue-900 transition-colors line-clamp-1">{mhs.nama_mahasiswa}</p>
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{mhs.nim}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-6">
-                      <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{mhs.prodi || 'Informatika'}</span>
-                    </td>
-                    <td className="px-6 py-6 text-center">
-                      <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700">Terdaftar</span>
-                    </td>
-                    <td className="px-6 py-6 text-right">
-                      <button
-                        onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
-                        className="rounded-xl bg-gray-100 px-5 py-3 text-[10px] font-black text-gray-600 hover:bg-[#1A365D] hover:text-white transition-all uppercase tracking-widest"
-                      >
-                        Kelola Tugas & Nilai
-                      </button>
+                      </td>
+                      <td className="px-6 py-6">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{mhs.prodi || 'Informatika'}</span>
+                      </td>
+                      <td className="px-6 py-6 text-center">
+                        <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700">Terdaftar</span>
+                      </td>
+                      <td className="px-6 py-6 text-right">
+                        <button
+                          onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
+                          className="rounded-xl bg-gray-100 px-5 py-3 text-[10px] font-black text-gray-600 hover:bg-[#1A365D] hover:text-white transition-all uppercase tracking-widest"
+                        >
+                          Kelola Tugas & Nilai
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={4} className="py-20 text-center text-sm font-black text-gray-400 uppercase tracking-widest">
+                      Belum Ada Mahasiswa di Kelas Ini
                     </td>
                   </tr>
-                );
-              }) : (
-                <tr>
-                  <td colSpan={4} className="py-20 text-center text-sm font-black text-gray-400 uppercase tracking-widest">
-                    Belum Ada Mahasiswa di Kelas Ini
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -483,7 +481,7 @@ export default function PenilaianTugasDosen() {
               </div>
 
               <div className="flex-grow overflow-y-auto pr-4 -mr-4">
-                
+
                 {/* Bagian Input Nilai Akhir Khusus */}
                 <div className="mb-8 p-6 rounded-3xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 shadow-inner flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
                   <div className="relative z-10">
@@ -492,7 +490,7 @@ export default function PenilaianTugasDosen() {
                       NILAI AKHIR MATA KULIAH
                     </h4>
                     <p className="text-[10px] font-bold text-gray-500 mt-2 max-w-sm leading-relaxed">
-                      Masukkan nilai akhir mahasiswa untuk mata kuliah ini. Nilai ini yang akan 
+                      Masukkan nilai akhir mahasiswa untuk mata kuliah ini. Nilai ini yang akan
                       dijadikan dasar pencetakan Kartu Hasil Studi (KHS) oleh Bagian Akademik.
                     </p>
                   </div>
@@ -515,10 +513,10 @@ export default function PenilaianTugasDosen() {
                           .from('pendaftaran_items')
                           .update({ nilai_akhir: parseInt(val) })
                           .eq('id', selectedMhs.pendaftaran_item_id);
-                          
+
                         if (!error) {
                           showNotify("Nilai Akhir berhasil disimpan!");
-                          setSelectedMhs({...selectedMhs, nilai_akhir: parseInt(val)});
+                          setSelectedMhs({ ...selectedMhs, nilai_akhir: parseInt(val) });
                           fetchStudents(selectedMK);
                         } else {
                           Swal.fire({
