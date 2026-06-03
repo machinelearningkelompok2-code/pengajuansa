@@ -8,6 +8,31 @@ import Swal from 'sweetalert2';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// ─── Semester Helpers ────────────────────────────────────────
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  if (month >= 1 && month <= 6) {
+    return { label: `Genap ${year - 1}/${year}`, start: new Date(year, 0, 1), end: new Date(year, 5, 30, 23, 59, 59) };
+  }
+  return { label: `Ganjil ${year}/${year + 1}`, start: new Date(year, 6, 1), end: new Date(year, 11, 31, 23, 59, 59) };
+}
+function getSemesterPeriodFromDate(date: Date) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  if (month >= 1 && month <= 6) return `Genap ${year - 1}/${year}`;
+  return `Ganjil ${year}/${year + 1}`;
+}
+function parseSemesterPeriodLabel(label: string) {
+  const parts = label.split(' ');
+  const type = parts[0];
+  const years = parts[1].split('/');
+  const y0 = parseInt(years[0]), y1 = parseInt(years[1]);
+  if (type === 'Genap') return { start: new Date(y1, 0, 1), end: new Date(y1, 5, 30, 23, 59, 59) };
+  return { start: new Date(y0, 6, 1), end: new Date(y0, 11, 31, 23, 59, 59) };
+}
+
 // ─── Icons ──────────────────────────────────────────────────
 const SearchIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -56,6 +81,10 @@ export default function AkademikDashboardPage() {
   const [search, setSearch] = useState('');
   const [akademikUser, setAkademikUser] = useState<any>(null);
 
+  // Filter semester
+  const [selectedSemester, setSelectedSemester] = useState<string>('');
+  const [semesterOptions, setSemesterOptions] = useState<string[]>([]);
+
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (userStr) setAkademikUser(JSON.parse(userStr));
@@ -64,14 +93,29 @@ export default function AkademikDashboardPage() {
 
   useEffect(() => {
     const q = search.toLowerCase();
-    setFiltered(
-      records.filter(r =>
+
+    let startLimit: Date | null = null;
+    let endLimit: Date | null = null;
+    if (selectedSemester) {
+      const range = parseSemesterPeriodLabel(selectedSemester);
+      startLimit = range.start;
+      endLimit = range.end;
+    }
+
+    const filteredList = records.filter(r => {
+      const matchesSearch =
         r.mahasiswa?.nama_mahasiswa?.toLowerCase().includes(q) ||
         r.mahasiswa?.nim?.toLowerCase().includes(q) ||
-        r.items?.[0]?.mata_kuliah?.nama_mk?.toLowerCase().includes(q)
-      )
-    );
-  }, [search, records]);
+        r.items?.[0]?.mata_kuliah?.nama_mk?.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+      if (startLimit && endLimit && r.created_at) {
+        const date = new Date(r.created_at);
+        return date >= startLimit && date <= endLimit;
+      }
+      return true;
+    });
+    setFiltered(filteredList);
+  }, [search, records, selectedSemester]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -80,6 +124,7 @@ export default function AkademikDashboardPage() {
       .select(`
         id,
         mahasiswa_id,
+        created_at,
         mahasiswa:mahasiswa_id(nama_mahasiswa, nim, prodi, jurusan, ipk, semester),
         items:pendaftaran_items(
           id,
@@ -92,7 +137,19 @@ export default function AkademikDashboardPage() {
       .in('status', ['KHS_Forwarded', 'KHS_Diterima'])
       .order('created_at', { ascending: false });
 
-    if (!error && data) setRecords(data);
+    if (!error && data) {
+      setRecords(data);
+
+      const currentPeriod = getCurrentSemesterPeriod();
+      const periodsSet = new Set<string>();
+      periodsSet.add(currentPeriod.label);
+      data.forEach((r: any) => {
+        if (r.created_at) periodsSet.add(getSemesterPeriodFromDate(new Date(r.created_at)));
+      });
+      const options = Array.from(periodsSet).sort();
+      setSemesterOptions(options);
+      setSelectedSemester(prev => prev || currentPeriod.label);
+    }
     setLoading(false);
   };
 
@@ -377,17 +434,28 @@ export default function AkademikDashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 border-b border-gray-100">
             <div>
               <h3 className="text-base font-bold text-[#1A365D]">Daftar KHS dari Sekjur</h3>
-              <p className="text-[11px] text-gray-400 mt-0.5">Memproses berkas Kartu Hasil Studi untuk diverifikasi secara institusional</p>
+              <p className="text-[11px] text-gray-400 mt-0.5 font-bold">Periode: <span className="text-blue-600 font-black">Semester {selectedSemester}</span></p>
             </div>
-            <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><SearchIcon /></div>
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Cari nama, NIM, atau prodi..."
-                className="w-full sm:w-72 rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-4 text-sm font-medium text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
-              />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <select
+                value={selectedSemester}
+                onChange={e => setSelectedSemester(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-gray-50 py-2.5 px-4 text-xs font-black text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all uppercase tracking-wider"
+              >
+                {semesterOptions.map(opt => (
+                  <option key={opt} value={opt}>Semester {opt}</option>
+                ))}
+              </select>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><SearchIcon /></div>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Cari nama, NIM, atau prodi..."
+                  className="w-full sm:w-72 rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-4 text-xs font-medium text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
+                />
+              </div>
             </div>
           </div>
 

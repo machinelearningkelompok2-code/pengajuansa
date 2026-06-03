@@ -6,6 +6,26 @@ import { supabase } from '../../../supabase/lib/supabase';
 import { fetchPengaturan } from '../../../supabase/lib/pengaturan';
 import Link from 'next/link';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1),
+      end: new Date(year, 5, 30, 23, 59, 59),
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1),
+      end: new Date(year, 11, 31, 23, 59, 59),
+    };
+  }
+}
+
 const TrendingUpIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
 );
@@ -43,6 +63,8 @@ export default function SekjurDashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
 
+    const semPeriod = getCurrentSemesterPeriod();
+
     const { data: pendaftaranData, error } = await supabase
       .from('pendaftaran_sa')
       .select(`
@@ -53,6 +75,8 @@ export default function SekjurDashboard() {
           prodi
         )
       `)
+      .gte('created_at', semPeriod.start.toISOString())
+      .lte('created_at', semPeriod.end.toISOString())
       .order('created_at', { ascending: false });
 
     if (pendaftaranData && !error) {
@@ -98,10 +122,17 @@ export default function SekjurDashboard() {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
 
+  const semesterPeriod = getCurrentSemesterPeriod();
+
   const topbarTitle = (
     <div>
       <h2 className="m-0 text-xl font-extrabold text-[#1A365D]">Dashboard Terpadu Sekjur & Admin</h2>
-      <p className="text-xs font-semibold text-gray-500">Selamat datang kembali, {sekjurName}</p>
+      <div className="flex items-center gap-2 mt-0.5">
+        <p className="text-xs font-semibold text-gray-500">Selamat datang kembali, {sekjurName}</p>
+        <span className="rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-[9px] font-black text-blue-700 uppercase tracking-widest">
+          Semester {semesterPeriod.label}
+        </span>
+      </div>
     </div>
   );
 
