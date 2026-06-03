@@ -114,11 +114,17 @@ export default function PenilaianTugasDosen() {
     // Ambil daftar mahasiswa di MK ini
     const { data } = await supabase
       .from('pendaftaran_items')
-      .select('pendaftaran_sa(mahasiswa:mahasiswa_id(id, nama_mahasiswa, nim, prodi))')
+      .select('*, pendaftaran_sa(mahasiswa:mahasiswa_id(id, nama_mahasiswa, nim, prodi))')
       .eq('mk_id', mkId);
 
     if (data) {
-      const list = data.map((d: any) => (d.pendaftaran_sa as any)?.mahasiswa).filter(Boolean);
+      const list = data.map((d: any) => {
+        const mhs = (d.pendaftaran_sa as any)?.mahasiswa;
+        if (mhs) {
+           return { ...mhs, pendaftaran_item_id: d.id, nilai_akhir: d.nilai_akhir };
+        }
+        return null;
+      }).filter(Boolean);
       setMhsList(list);
     }
     setLoading(false);
@@ -435,6 +441,62 @@ export default function PenilaianTugasDosen() {
               </div>
 
               <div className="flex-grow overflow-y-auto pr-4 -mr-4">
+                
+                {/* Bagian Input Nilai Akhir Khusus */}
+                <div className="mb-8 p-6 rounded-3xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 shadow-inner flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+                  <div className="relative z-10">
+                    <h4 className="text-sm font-black text-[#1A365D] uppercase tracking-widest flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white text-[10px]">★</span>
+                      NILAI AKHIR MATA KULIAH
+                    </h4>
+                    <p className="text-[10px] font-bold text-gray-500 mt-2 max-w-sm leading-relaxed">
+                      Masukkan nilai akhir mahasiswa untuk mata kuliah ini. Nilai ini yang akan 
+                      dijadikan dasar pencetakan Kartu Hasil Studi (KHS) oleh Bagian Akademik.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 relative z-10 w-full md:w-auto">
+                    <input
+                      type="number"
+                      id="input-nilai-akhir"
+                      defaultValue={selectedMhs.nilai_akhir ?? ""}
+                      placeholder="0-100"
+                      className="w-full md:w-24 rounded-2xl bg-white border border-gray-200 px-4 py-4 text-center text-2xl font-black text-[#1A365D] outline-none focus:ring-4 focus:ring-blue-200 transition-all shadow-sm"
+                    />
+                    <button
+                      onClick={async () => {
+                        const val = (document.getElementById('input-nilai-akhir') as HTMLInputElement).value;
+                        if (!val) {
+                          Swal.fire('Informasi', 'Harap masukkan nilai.', 'warning');
+                          return;
+                        }
+                        const { error } = await supabase
+                          .from('pendaftaran_items')
+                          .update({ nilai_akhir: parseInt(val) })
+                          .eq('id', selectedMhs.pendaftaran_item_id);
+                          
+                        if (!error) {
+                          showNotify("Nilai Akhir berhasil disimpan!");
+                          setSelectedMhs({...selectedMhs, nilai_akhir: parseInt(val)});
+                          fetchStudents(selectedMK);
+                        } else {
+                          Swal.fire({
+                            title: 'Kolom Belum Tersedia',
+                            html: 'Sepertinya kolom <b>nilai_akhir</b> belum ada di tabel pendaftaran_items pada database Anda.<br/><br/>Harap jalankan SQL berikut di Dashboard Supabase:<br/><br/><code style="background:#eee;padding:10px;display:block;border-radius:8px">ALTER TABLE pendaftaran_items ADD COLUMN nilai_akhir NUMERIC;</code>',
+                            icon: 'error',
+                            confirmButtonColor: '#1A365D'
+                          });
+                        }
+                      }}
+                      className="h-16 px-8 rounded-2xl bg-[#1A365D] flex items-center justify-center text-white font-black text-xs hover:bg-blue-700 active:scale-95 transition-all shadow-xl shadow-blue-900/30 uppercase tracking-[0.1em] shrink-0"
+                    >
+                      Simpan
+                    </button>
+                  </div>
+                  <div className="absolute -right-10 -bottom-10 opacity-10 pointer-events-none">
+                    <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" /></svg>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between mb-6">
                   <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest">Daftar Tugas & Nilai</h4>
                 </div>

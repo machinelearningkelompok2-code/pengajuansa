@@ -86,8 +86,7 @@ export default function AkademikDashboardPage() {
         mahasiswa_id,
         mahasiswa:mahasiswa_id(nama_mahasiswa, nim, prodi, jurusan, ipk, semester),
         items:pendaftaran_items(
-          id,
-          nilai_lama,
+          *,
           mata_kuliah:mk_id(kode_mk, nama_mk, sks, semester_asal)
         ),
         status
@@ -131,7 +130,14 @@ export default function AkademikDashboardPage() {
         const sub = t.pengumpulan_tugas?.find((s: any) => s.mahasiswa_id === record.mahasiswa_id);
         if (sub && sub.nilai !== null) { sum += parseFloat(sub.nilai); cnt++; }
       });
-      const score = cnt > 0 ? sum / cnt : 85;
+      
+      let score = 85;
+      if (item.nilai_akhir !== null && item.nilai_akhir !== undefined) {
+        score = parseFloat(item.nilai_akhir);
+      } else if (cnt > 0) {
+        score = sum / cnt;
+      }
+      
       const grade = gradeFromScore(score);
       const sksVal = mk?.sks || 0;
       const bbtVal = bobotFromGrade(grade);
