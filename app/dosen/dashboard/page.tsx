@@ -17,9 +17,34 @@ const ChevronRightIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
 );
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
 export default function DosenDashboard() {
   const [loading, setLoading] = useState(true);
   const [dosenInfo, setDosenInfo] = useState<any>(null);
+  
+  const semesterPeriod = getCurrentSemesterPeriod();
 
   const [stats, setStats] = useState({
     totalMahasiswa: 0,
@@ -68,8 +93,16 @@ export default function DosenDashboard() {
       if (mkIds.length > 0) {
         const { data: pItems } = await supabase
           .from('pendaftaran_items')
-          .select('mk_id, pendaftaran_sa(mahasiswa_id)')
+          .select('mk_id, pendaftaran_sa(created_at, mahasiswa_id)')
           .in('mk_id', mkIds);
+
+        // Filter pendaftaran yang masuk pada semester aktif
+        const activePItems = (pItems || []).filter((p: any) => {
+          const createdAtStr = (p.pendaftaran_sa as any)?.created_at;
+          if (!createdAtStr) return false;
+          const date = new Date(createdAtStr);
+          return date >= semesterPeriod.start && date <= semesterPeriod.end;
+        });
 
         // Grouping by MK ID to avoid duplicates
         const courseMap = new Map();
@@ -79,7 +112,7 @@ export default function DosenDashboard() {
           if (!mkInfo) return;
 
           if (!courseMap.has(a.mk_id)) {
-            const studentCount = pItems?.filter(p => p.mk_id === a.mk_id).length || 0;
+            const studentCount = activePItems.filter(p => p.mk_id === a.mk_id).length || 0;
             courseMap.set(a.mk_id, {
               id: a.mk_id,
               name: mkInfo.nama_mk,
@@ -91,16 +124,18 @@ export default function DosenDashboard() {
         });
 
         mappedCourses = Array.from(courseMap.values());
-        totalMahasiswa = new Set(pItems?.map(p => (p.pendaftaran_sa as any)?.mahasiswa_id).filter(Boolean)).size;
+        totalMahasiswa = new Set(activePItems.map(p => (p.pendaftaran_sa as any)?.mahasiswa_id).filter(Boolean)).size;
       }
 
       setCourses(mappedCourses);
 
-      // 4. Fetch Tugas dan Progress Penilaian
+      // 4. Fetch Tugas dan Progress Penilaian pada Semester Aktif
       const { data: tugas } = await supabase
         .from('tugas')
         .select('id, judul, mata_kuliah(nama_mk)')
-        .eq('dosen_id', user.id);
+        .eq('dosen_id', user.id)
+        .gte('created_at', semesterPeriod.start.toISOString())
+        .lte('created_at', semesterPeriod.end.toISOString());
 
       const tugasIds = tugas?.map(t => t.id) || [];
 
@@ -193,7 +228,7 @@ export default function DosenDashboard() {
             <div className="relative z-10">
               <p className="text-[10px] font-bold uppercase tracking-wider text-blue-200 mb-3">MATA KULIAH DIAJAR</p>
               <span className="text-4xl font-extrabold">{stats.jumlahMK}</span>
-              <p className="text-[10px] text-blue-300 mt-1">Semester Antara 2024</p>
+              <p className="text-[10px] text-blue-300 mt-1">Semester {semesterPeriod.label}</p>
             </div>
           </div>
         </div>
