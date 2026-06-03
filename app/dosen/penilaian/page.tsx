@@ -62,6 +62,7 @@ export default function PenilaianTugasDosen() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<string | null>(null);
   const [newTask, setNewTask] = useState({
     judul: "",
     deskripsi: "",
@@ -288,6 +289,36 @@ export default function PenilaianTugasDosen() {
         icon: 'error',
         confirmButtonColor: '#1A365D'
       });
+    }
+  };
+
+  const openFile = (base64Data: string) => {
+    try {
+      // Jika bukan base64 (misal URL asli), jadikan preview langsung
+      if (!base64Data.startsWith('data:')) {
+        setPreviewFile(base64Data);
+        setPreviewType(base64Data.toLowerCase().match(/\.(jpeg|jpg|gif|png)$/) != null ? 'image/jpeg' : 'application/pdf');
+        return;
+      }
+
+      // Konversi Base64 ke Blob agar bisa dibuka di iframe (in-app preview)
+      const parts = base64Data.split(';base64,');
+      const contentType = parts[0].split(':')[1];
+      const raw = window.atob(parts[1]);
+      const rawLength = raw.length;
+      const uInt8Array = new Uint8Array(rawLength);
+
+      for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+      }
+
+      const blob = new Blob([uInt8Array], { type: contentType });
+      const blobUrl = URL.createObjectURL(blob);
+      setPreviewFile(blobUrl);
+      setPreviewType(contentType);
+    } catch (error) {
+      console.error("Gagal membuka file:", error);
+      Swal.fire('Error', 'Gagal membuka berkas tugas.', 'error');
     }
   };
 
@@ -644,7 +675,7 @@ export default function PenilaianTugasDosen() {
 
         {/* In-App Document Preview Modal */}
         {previewFile && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0F172A]/90 backdrop-blur-md p-4 sm:p-8 transition-all">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0F172A]/90 backdrop-blur-md p-4 sm:p-8 transition-all">
             <div className="relative w-full max-w-5xl h-[90vh] rounded-[2rem] bg-white shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-300">
               <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 bg-gray-50/50">
                 <div className="flex items-center gap-3">
@@ -665,12 +696,20 @@ export default function PenilaianTugasDosen() {
                   </button>
                 </div>
               </div>
-              <div className="flex-grow bg-gray-200/50 relative">
-                <iframe 
-                  src={previewFile} 
-                  className="w-full h-full border-none"
-                  title="Document Preview"
-                ></iframe>
+              <div className="flex-grow bg-gray-200/50 relative p-4 overflow-hidden">
+                {previewType?.startsWith('image/') ? (
+                  <img 
+                    src={previewFile} 
+                    alt="Document Preview" 
+                    className="absolute inset-4 w-[calc(100%-2rem)] h-[calc(100%-2rem)] object-contain drop-shadow-md"
+                  />
+                ) : (
+                  <iframe 
+                    src={previewFile} 
+                    className="w-full h-full border-none bg-white rounded-xl"
+                    title="Document Preview"
+                  ></iframe>
+                )}
               </div>
             </div>
           </div>
