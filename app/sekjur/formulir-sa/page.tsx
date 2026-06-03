@@ -335,7 +335,7 @@ function PengisianFormulirSAInner() {
       <div className="flex flex-col flex-grow min-h-full">
       {/* Banner info saat mode edit (pre-fill dari mahasiswa) */}
       {isEditMode && (
-        <div className="mx-auto max-w-4xl w-full mb-6 flex items-center gap-4 rounded-2xl bg-blue-50 border border-blue-100 px-6 py-4">
+        <div className="w-full mb-6 flex items-center gap-4 rounded-2xl bg-blue-50 border border-blue-100 px-6 py-4">
           <div className="text-2xl">✏️</div>
           <div>
             <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Mode Pengisian Formulir SA</p>
@@ -343,7 +343,7 @@ function PengisianFormulirSAInner() {
           </div>
         </div>
       )}
-      <div className="mx-auto max-w-4xl w-full flex flex-col gap-8 relative flex-grow">
+      <div className="w-full flex flex-col gap-8 relative flex-grow">
 
         {loading && (
           <div className="absolute inset-0 z-50 flex items-center justify-center rounded-3xl bg-white/70 backdrop-blur-sm">
