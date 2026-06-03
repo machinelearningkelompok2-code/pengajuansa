@@ -5,9 +5,34 @@ import Link from 'next/link';
 import KaprodiLayout from '../../../components/KaprodiLayout';
 import { supabase } from '../../../supabase/lib/supabase';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
 export default function ValidasiFormulir() {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const semesterPeriod = getCurrentSemesterPeriod();
 
   useEffect(() => {
     fetchApplications();
@@ -15,6 +40,7 @@ export default function ValidasiFormulir() {
 
   const fetchApplications = async () => {
     setLoading(true);
+    const semesterPeriod = getCurrentSemesterPeriod();
     const { data, error } = await supabase
       .from('pendaftaran_sa')
       .select(`
@@ -26,6 +52,8 @@ export default function ValidasiFormulir() {
         pembayaran (id)
       `)
       .eq('status', 'Approved') // Hanya tarik data yang sudah tervalidasi Sekjur
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString())
       .order('created_at', { ascending: false });
 
     if (!error && data) {
@@ -52,9 +80,15 @@ export default function ValidasiFormulir() {
   return (
     <KaprodiLayout topbarTitle={topbarTitle}>
       <div className="flex flex-col gap-6 relative">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-[#1A365D]">Antrian Pengajuan ({applications.length})</h3>
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700 uppercase tracking-widest border border-blue-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <h3 className="text-lg font-bold text-[#1A365D]">Antrian Pengajuan ({applications.length})</h3>
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 border border-blue-100">
+              <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Periode Aktif: Semester {semesterPeriod.label}</span>
+            </div>
+          </div>
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700 uppercase tracking-widest border border-blue-100 w-fit">
              Formulir Masuk
           </span>
         </div>
