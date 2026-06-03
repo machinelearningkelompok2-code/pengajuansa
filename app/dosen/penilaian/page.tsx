@@ -153,7 +153,8 @@ export default function PenilaianTugasDosen() {
       
       supabase
         .from('tugas')
-        .select('mahasiswa_id, pengumpulan_tugas(nilai, file_url)')
+        // JANGAN ambil file_url di awal karena bisa berupa Base64 besar yang membuat lambat
+        .select('mahasiswa_id, pengumpulan_tugas(id, nilai)')
         .eq('mk_id', mkId)
         .gte('created_at', semesterPeriod.start.toISOString())
         .lte('created_at', semesterPeriod.end.toISOString())
@@ -171,8 +172,8 @@ export default function PenilaianTugasDosen() {
             const mhsTugas = tugasData.filter(t => t.mahasiswa_id === mhs.id);
             unreadTugas = mhsTugas.reduce((acc, curr) => {
               const submission = curr.pengumpulan_tugas?.[0];
-              // Hitung tugas yang sudah ada file tapi belum dinilai
-              if (submission && submission.file_url && (submission.nilai === null || submission.nilai === undefined)) {
+              // Hitung tugas yang sudah dikumpul (punya id di tabel pengumpulan_tugas) tapi belum dinilai
+              if (submission && submission.id && (submission.nilai === null || submission.nilai === undefined)) {
                 return acc + 1;
               }
               return acc;
@@ -208,7 +209,8 @@ export default function PenilaianTugasDosen() {
     setLoading(true);
     const { data } = await supabase
       .from('tugas')
-      .select('*, pengumpulan_tugas(*)')
+      // Hanya select field ringan, exclude file_url (Base64)
+      .select('id, judul, deskripsi, deadline, created_at, pengumpulan_tugas(id, nilai)')
       .eq('mk_id', mkId)
       .eq('mahasiswa_id', mhsId)
       .gte('created_at', semesterPeriod.start.toISOString())
@@ -219,6 +221,29 @@ export default function PenilaianTugasDosen() {
       setTugasMhs(data);
     }
     setLoading(false);
+  };
+
+  // Fungsi Lazy Load File
+  const fetchAndOpenFile = async (pengumpulanId: string) => {
+    Swal.fire({
+      title: 'Membuka Berkas...',
+      text: 'Mengunduh berkas tugas, mohon tunggu...',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+    
+    const { data, error } = await supabase
+      .from('pengumpulan_tugas')
+      .select('file_url')
+      .eq('id', pengumpulanId)
+      .single();
+
+    if (error || !data?.file_url) {
+      Swal.fire('Gagal', 'Berkas tugas tidak ditemukan atau gagal diunduh.', 'error');
+      return;
+    }
+    Swal.close();
+    openFile(data.file_url);
   };
 
   const handleCreateTaskForMhs = async () => {
@@ -625,9 +650,9 @@ export default function PenilaianTugasDosen() {
 
                       <div className="flex items-center justify-between mt-2 pt-4 border-t border-gray-100/30">
                         <div className="flex items-center gap-4">
-                          {t.pengumpulan_tugas?.[0]?.file_url ? (
+                          {t.pengumpulan_tugas?.[0]?.id ? (
                             <div
-                              onClick={() => openFile(t.pengumpulan_tugas[0].file_url)}
+                              onClick={() => fetchAndOpenFile(t.pengumpulan_tugas[0].id)}
                               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-[10px] font-black text-white cursor-pointer hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
                             >
                               <PaperclipIcon /> LIHAT BERKAS TUGAS
