@@ -108,9 +108,84 @@ export default function RegisterPage() {
         console.warn("Trigger mungkin sudah menangani tabel mahasiswa.");
       }
 
+      // 4. Kirim notifikasi email pemberitahuan pembuatan akun
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: formData.email,
+            subject: '✅ Akun Anda Berhasil Dibuat — Portal SA Polimdo',
+            html: `
+              <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e5e7eb;">
+                <div style="background: linear-gradient(135deg, #1A365D 0%, #1E3A8A 100%); padding: 40px 32px; text-align: center;">
+                  <h1 style="color: #ffffff; font-size: 24px; font-weight: 800; margin: 0 0 8px;">🎓 Selamat Datang!</h1>
+                  <p style="color: #93c5fd; font-size: 13px; margin: 0;">Portal Pendaftaran Semester Antara — Politeknik Negeri Manado</p>
+                </div>
+                <div style="padding: 32px;">
+                  <p style="color: #374151; font-size: 15px; line-height: 1.7; margin: 0 0 20px;">
+                    Halo <strong>${formData.nama}</strong>,
+                  </p>
+                  <p style="color: #374151; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
+                    Akun Anda telah <strong style="color: #059669;">berhasil dibuat</strong> di Portal Semester Antara Politeknik Negeri Manado. Berikut informasi akun Anda:
+                  </p>
+                  <div style="background: #f8fafc; border-radius: 12px; padding: 20px 24px; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Nama Lengkap</td>
+                        <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${formData.nama}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">NIM</td>
+                        <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${formData.nim}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Email</td>
+                        <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${formData.email}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Jurusan</td>
+                        <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${formData.jurusan}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Program Studi</td>
+                        <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${formData.prodi}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Semester</td>
+                        <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600; text-align: right;">${formData.semester}</td>
+                      </tr>
+                    </table>
+                  </div>
+                  <p style="color: #374151; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
+                    Anda sekarang dapat login ke portal untuk mendaftar mata kuliah Semester Antara, mengumpulkan tugas, dan memantau status pendaftaran Anda.
+                  </p>
+                  <div style="text-align: center; margin-bottom: 24px;">
+                    <a href="${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/login" style="display: inline-block; background: linear-gradient(135deg, #1A365D 0%, #1E3A8A 100%); color: #ffffff; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">
+                      Login Sekarang →
+                    </a>
+                  </div>
+                </div>
+                <div style="background: #f1f5f9; padding: 20px 32px; text-align: center; border-top: 1px solid #e2e8f0;">
+                  <p style="color: #9ca3af; font-size: 11px; margin: 0; font-weight: 600;">
+                    © ${new Date().getFullYear()} Politeknik Negeri Manado — Portal Semester Antara
+                  </p>
+                  <p style="color: #d1d5db; font-size: 10px; margin: 4px 0 0;">
+                    Email ini dikirim secara otomatis. Mohon untuk tidak membalas email ini.
+                  </p>
+                </div>
+              </div>
+            `
+          })
+        });
+      } catch (emailErr) {
+        console.warn("Email notifikasi gagal dikirim:", emailErr);
+        // Tidak throw error — registrasi tetap berhasil meski email gagal
+      }
+
       Swal.fire({
       title: 'Berhasil',
-      text: "Pendaftaran Berhasil! Silakan cek email Anda (jika konfirmasi email aktif) atau langsung login.",
+      text: "Pendaftaran Berhasil! Notifikasi telah dikirim ke email Anda. Silakan login.",
       icon: 'success',
       confirmButtonColor: '#1A365D'
     });
