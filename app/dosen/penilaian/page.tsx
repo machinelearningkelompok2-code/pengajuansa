@@ -132,6 +132,8 @@ export default function PenilaianTugasDosen() {
     setLoading(false);
   };
 
+  const semesterPeriod = getCurrentSemesterPeriod();
+
   const fetchStudents = async (mkId: string) => {
     setLoading(true);
     // Ambil daftar mahasiswa di MK ini
@@ -140,11 +142,31 @@ export default function PenilaianTugasDosen() {
       .select('*, pendaftaran_sa(mahasiswa:mahasiswa_id(id, nama_mahasiswa, nim, prodi))')
       .eq('mk_id', mkId);
 
+    // Fetch tugas and pengumpulan
+    const { data: tugasData } = await supabase
+      .from('tugas')
+      .select('mahasiswa_id, pengumpulan_tugas(nilai, file_url)')
+      .eq('mk_id', mkId)
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString());
+
     if (data) {
       const rawList = data.map((d: any) => {
         const mhs = (d.pendaftaran_sa as any)?.mahasiswa;
         if (mhs) {
-          return { ...mhs, pendaftaran_item_id: d.id, nilai_akhir: d.nilai_akhir };
+          let unreadTugas = 0;
+          if (tugasData) {
+            const mhsTugas = tugasData.filter(t => t.mahasiswa_id === mhs.id);
+            unreadTugas = mhsTugas.reduce((acc, curr) => {
+              const submission = curr.pengumpulan_tugas?.[0];
+              // Hitung tugas yang sudah ada file tapi belum dinilai
+              if (submission && submission.file_url && (submission.nilai === null || submission.nilai === undefined)) {
+                return acc + 1;
+              }
+              return acc;
+            }, 0);
+          }
+          return { ...mhs, pendaftaran_item_id: d.id, nilai_akhir: d.nilai_akhir, unread_tugas: unreadTugas };
         }
         return null;
       }).filter(Boolean);
@@ -157,12 +179,18 @@ export default function PenilaianTugasDosen() {
         return true;
       });
 
+      // Urutkan: yang punya tugas belum dinilai paling atas, lalu alfabetis
+      uniqueList.sort((a, b) => {
+        if (b.unread_tugas !== a.unread_tugas) {
+          return b.unread_tugas - a.unread_tugas;
+        }
+        return a.nama_mahasiswa.localeCompare(b.nama_mahasiswa);
+      });
+
       setMhsList(uniqueList);
     }
     setLoading(false);
   };
-
-  const semesterPeriod = getCurrentSemesterPeriod();
 
   const fetchTugasMahasiswa = async (mhsId: string, mkId: string) => {
     setLoading(true);
@@ -379,9 +407,14 @@ export default function PenilaianTugasDosen() {
             {mhsList.length > 0 ? mhsList.map((mhs, index) => {
               const color = getRandomColorClass(index);
               return (
-                <div key={`m-${mhs.id}-${index}`} className="p-5 flex items-center gap-4">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] font-black text-sm shadow-sm ${color.bg} ${color.text} border border-white/50`}>
+                <div key={`m-${mhs.id}-${index}`} className="p-5 flex items-center gap-4 relative">
+                  <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] font-black text-sm shadow-sm ${color.bg} ${color.text} border border-white/50`}>
                     {getInitials(mhs.nama_mahasiswa)}
+                    {mhs.unread_tugas > 0 && (
+                      <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm border-2 border-white">
+                        {mhs.unread_tugas}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-grow min-w-0">
                     <p className="text-sm font-bold text-gray-900 line-clamp-1">{mhs.nama_mahasiswa}</p>
@@ -421,8 +454,13 @@ export default function PenilaianTugasDosen() {
                     <tr key={`d-${mhs.id}-${index}`} className="transition-all hover:bg-blue-50/30 group">
                       <td className="px-6 py-6">
                         <div className="flex items-center gap-4">
-                          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] font-black text-sm shadow-sm ${color.bg} ${color.text} border border-white/50`}>
+                          <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] font-black text-sm shadow-sm ${color.bg} ${color.text} border border-white/50`}>
                             {getInitials(mhs.nama_mahasiswa)}
+                            {mhs.unread_tugas > 0 && (
+                              <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm border-2 border-white">
+                                {mhs.unread_tugas}
+                              </span>
+                            )}
                           </div>
                           <div>
                             <p className="text-sm font-bold text-gray-900 group-hover:text-blue-900 transition-colors line-clamp-1">{mhs.nama_mahasiswa}</p>
