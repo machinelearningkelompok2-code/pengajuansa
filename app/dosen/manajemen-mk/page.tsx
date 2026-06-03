@@ -5,6 +5,29 @@ import DosenLayout from '../../../components/DosenLayout';
 import { supabase } from '../../../supabase/lib/supabase';
 import Swal from 'sweetalert2';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
 const PlusIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 );
@@ -19,6 +42,8 @@ export default function ManajemenMK() {
   const [selectedMK, setSelectedMK] = useState<any | null>(null);
   const [enrolledStudents, setEnrolledStudents] = useState<any[]>([]);
   const [loadingModal, setLoadingModal] = useState(false);
+  
+  const semesterPeriod = getCurrentSemesterPeriod();
 
   // State untuk Edit MK
   const [editingMK, setEditingMK] = useState<any | null>(null);
@@ -59,16 +84,33 @@ export default function ManajemenMK() {
       if (mkIds.length > 0) {
         const { data: itemsData } = await supabase
           .from('pendaftaran_items')
-          .select('mk_id, pendaftaran_sa(mahasiswa_id)')
+          .select('mk_id, pendaftaran_sa(created_at, mahasiswa_id)')
           .in('mk_id', mkIds);
-        if (itemsData) pItems = itemsData;
+        if (itemsData) {
+          // Filter pendaftaran yang masuk pada semester aktif
+          pItems = itemsData.filter((p: any) => {
+            const createdAtStr = (p.pendaftaran_sa as any)?.created_at;
+            if (!createdAtStr) return false;
+            const date = new Date(createdAtStr);
+            return date >= semesterPeriod.start && date <= semesterPeriod.end;
+          });
+        }
       }
 
       const courseMap = new Map();
       data.forEach((item: any) => {
         const mk = item.mata_kuliah;
         if (mk && !courseMap.has(mk.id)) {
-          const count = pItems.filter(p => p.mk_id === mk.id).length;
+          // Hitung unik mahasiswa (deduplikasi)
+          const mkItems = pItems.filter(p => p.mk_id === mk.id);
+          const uniqueStudents = new Set();
+          mkItems.forEach(p => {
+            if ((p.pendaftaran_sa as any)?.mahasiswa_id) {
+              uniqueStudents.add((p.pendaftaran_sa as any).mahasiswa_id);
+            }
+          });
+          const count = uniqueStudents.size;
+          
           courseMap.set(mk.id, {
             ...mk,
             studentsCount: count
@@ -90,7 +132,9 @@ export default function ManajemenMK() {
       .from('pendaftaran_items')
       .select(`
         pendaftaran_sa (
+          created_at,
           mahasiswa (
+            id,
             nim,
             nama_mahasiswa,
             prodi
@@ -100,8 +144,26 @@ export default function ManajemenMK() {
       .eq('mk_id', course.id);
 
     if (!error && data) {
-      const students = data.map((d: any) => d.pendaftaran_sa?.mahasiswa).filter(Boolean);
-      setEnrolledStudents(students);
+      // Filter mahasiswa berdasarkan tanggal pendaftaran di semester aktif
+      const students = data
+        .filter((d: any) => {
+          const createdAtStr = d.pendaftaran_sa?.created_at;
+          if (!createdAtStr) return false;
+          const date = new Date(createdAtStr);
+          return date >= semesterPeriod.start && date <= semesterPeriod.end;
+        })
+        .map((d: any) => d.pendaftaran_sa?.mahasiswa)
+        .filter(Boolean);
+
+      // Deduplikasi
+      const seen = new Set();
+      const uniqueStudents = students.filter((s: any) => {
+        if (seen.has(s.id)) return false;
+        seen.add(s.id);
+        return true;
+      });
+
+      setEnrolledStudents(uniqueStudents);
     }
     setLoadingModal(false);
   };
@@ -189,7 +251,10 @@ export default function ManajemenMK() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-[#1A365D]">Daftar Mata Kuliah Saya</h3>
-            <p className="text-xs text-gray-500 font-medium tracking-wide uppercase">Semester Antara 2024</p>
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 border border-blue-100">
+              <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Periode Aktif: Semester {semesterPeriod.label}</span>
+            </div>
           </div>
         </div>
 
