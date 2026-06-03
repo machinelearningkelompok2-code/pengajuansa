@@ -44,10 +44,6 @@ const CloseIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 );
 
-const BellIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-);
-
 export default function PenilaianTugasDosen() {
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<{ show: boolean, msg: string }>({ show: false, msg: "" });
@@ -429,20 +425,12 @@ export default function PenilaianTugasDosen() {
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{mhs.nim}</p>
                     <p className="text-[10px] font-semibold text-gray-400 mt-0.5">{mhs.prodi || 'Informatika'}</p>
                   </div>
-                  <div className="flex flex-col gap-2 mt-4">
-                    <button
-                      onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
-                      className="w-full rounded-xl bg-[#FACC15] px-4 py-3 text-[10px] font-black text-[#1A365D] hover:bg-[#FDE047] transition-colors shadow-sm uppercase tracking-widest"
-                    >
-                      Detail & Penilaian
-                    </button>
-                    <button
-                      onClick={() => handleSendReminder(mhs)}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-white border-2 border-red-100 px-4 py-3 text-[10px] font-black text-red-500 hover:bg-red-50 transition-colors shadow-sm uppercase tracking-widest"
-                    >
-                      <BellIcon /> Kirim Pengingat
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
+                    className="mt-4 shrink-0 rounded-xl bg-gray-100 px-3 py-2.5 text-[10px] font-black text-gray-600 hover:bg-[#1A365D] hover:text-white transition-all uppercase tracking-widest"
+                  >
+                    Kelola
+                  </button>
                 </div>
               );
             }) : (
@@ -491,21 +479,12 @@ export default function PenilaianTugasDosen() {
                         <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700">Terdaftar</span>
                       </td>
                       <td className="px-6 py-6 text-right">
-                        <div className="flex items-center justify-end gap-3">
-                          <button
-                            onClick={() => handleSendReminder(mhs)}
-                            title="Kirim Email Pengingat"
-                            className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 hover:scale-105 transition-all"
-                          >
-                            <BellIcon />
-                          </button>
-                          <button
-                            onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
-                            className="rounded-xl bg-[#1A365D] px-6 py-2.5 text-[10px] font-black text-white hover:bg-blue-900 transition-colors uppercase tracking-widest shadow-lg shadow-blue-900/20"
-                          >
-                            Kelola Nilai
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
+                          className="rounded-xl bg-gray-100 px-5 py-3 text-[10px] font-black text-gray-600 hover:bg-[#1A365D] hover:text-white transition-all uppercase tracking-widest"
+                        >
+                          Kelola Tugas & Nilai
+                        </button>
                       </td>
                     </tr>
                   );
