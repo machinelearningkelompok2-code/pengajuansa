@@ -27,6 +27,7 @@ export default function PembayaranSekjur() {
   // State for Modal
   const [selectedProof, setSelectedProof] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loadingProof, setLoadingProof] = useState(false);
 
   useEffect(() => {
     fetchPayments();
@@ -36,12 +37,14 @@ export default function PembayaranSekjur() {
 
   const fetchPayments = async () => {
     setLoading(true);
+    // Sengaja TIDAK fetch bukti_url di sini karena berupa Base64 besar
+    // yang memperlambat loading awal. Hanya fetch metadata saja.
     const { data, error } = await supabase
       .from('pendaftaran_sa')
       .select(`
         *,
         mahasiswa:mahasiswa_id (nama_mahasiswa, nim, prodi, jurusan, ipk, semester),
-        pembayaran (bukti_url),
+        pembayaran (id),
         items:pendaftaran_items(
           id,
           nilai_lama,
@@ -52,12 +55,41 @@ export default function PembayaranSekjur() {
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      // Tampilkan SEMUA pendaftaran (dari mahasiswa maupun dari formulir sekjur)
-      // Pendaftaran dari mahasiswa = ada data pembayaran
-      // Pendaftaran dari formulir sekjur = tidak ada data pembayaran (Sekjur langsung input)
       setPayments(data);
     }
     setLoading(false);
+  };
+
+  // Fetch bukti_url HANYA saat tombol diklik (lazy load)
+  const fetchAndShowProof = async (pembayaranId: string | undefined) => {
+    if (!pembayaranId) {
+      Swal.fire({
+        title: 'Informasi',
+        text: 'Mahasiswa belum mengunggah bukti pembayaran.',
+        icon: 'info',
+        confirmButtonColor: '#1A365D'
+      });
+      return;
+    }
+    setLoadingProof(true);
+    const { data, error } = await supabase
+      .from('pembayaran')
+      .select('bukti_url')
+      .eq('id', pembayaranId)
+      .single();
+    setLoadingProof(false);
+
+    if (error || !data?.bukti_url) {
+      Swal.fire({
+        title: 'Informasi',
+        text: 'Bukti pembayaran tidak ditemukan.',
+        icon: 'info',
+        confirmButtonColor: '#1A365D'
+      });
+      return;
+    }
+    setSelectedProof(data.bukti_url);
+    setIsModalOpen(true);
   };
 
   const verifyPayment = async (id: string, currentStatus: string) => {
@@ -97,19 +129,7 @@ export default function PembayaranSekjur() {
     }
   };
 
-  const openProofModal = (url: string | undefined) => {
-    if (!url) {
-      Swal.fire({
-        title: 'Informasi',
-        text: "Mahasiswa belum mengunggah bukti pembayaran.",
-        icon: 'info',
-        confirmButtonColor: '#1A365D'
-      });
-      return;
-    }
-    setSelectedProof(url);
-    setIsModalOpen(true);
-  };
+  // openProofModal replaced by fetchAndShowProof above
 
   const getInitials = (name: string) => {
     if (!name) return "??";
@@ -230,10 +250,11 @@ export default function PembayaranSekjur() {
                 {/* Tombol lihat bukti hanya untuk pendaftaran dari mahasiswa */}
                 {pay.pembayaran && pay.pembayaran.length > 0 && (
                   <button
-                    onClick={() => openProofModal(pay.pembayaran?.[0]?.bukti_url)}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gray-100 py-2.5 text-[9px] font-black text-gray-600 hover:bg-blue-600 hover:text-white transition-all uppercase"
+                    onClick={() => fetchAndShowProof(pay.pembayaran?.[0]?.id)}
+                    disabled={loadingProof}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gray-100 py-2.5 text-[9px] font-black text-gray-600 hover:bg-blue-600 hover:text-white transition-all uppercase disabled:opacity-60"
                   >
-                    <EyeIcon /> Bukti
+                    {loadingProof ? <span className="animate-spin h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full" /> : <EyeIcon />} Bukti
                   </button>
                 )}
 
@@ -328,10 +349,11 @@ export default function PembayaranSekjur() {
                       {/* Tombol lihat bukti hanya untuk pendaftaran dari mahasiswa */}
                       {pay.pembayaran && pay.pembayaran.length > 0 && (
                         <button
-                          onClick={() => openProofModal(pay.pembayaran?.[0]?.bukti_url)}
-                          className="flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-[10px] font-black text-gray-600 hover:bg-blue-600 hover:text-white hover:shadow-lg hover:shadow-blue-600/20 transition-all uppercase tracking-widest"
+                          onClick={() => fetchAndShowProof(pay.pembayaran?.[0]?.id)}
+                          disabled={loadingProof}
+                          className="flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-[10px] font-black text-gray-600 hover:bg-blue-600 hover:text-white hover:shadow-lg hover:shadow-blue-600/20 transition-all uppercase tracking-widest disabled:opacity-60"
                         >
-                          <EyeIcon /> Bukti
+                          {loadingProof ? <span className="animate-spin h-3 w-3 border-2 border-gray-500 border-t-transparent rounded-full" /> : <EyeIcon />} Bukti
                         </button>
                       )}
 
