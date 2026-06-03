@@ -5,6 +5,29 @@ import DosenLayout from '../../../components/DosenLayout';
 import Link from 'next/link';
 import { supabase } from '../../../supabase/lib/supabase';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
 // Icons
 const PlusIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -22,6 +45,8 @@ export default function ManajemenTugasDosen() {
   const [activePage, setActivePage] = useState(1);
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const semesterPeriod = getCurrentSemesterPeriod();
   
   const [stats, setStats] = useState({
     aktif: 0,
@@ -45,11 +70,13 @@ export default function ManajemenTugasDosen() {
     }
     const user = JSON.parse(userStr);
 
-    // 1. Fetch Tugas Khusus Dosen yang Login
+    // 1. Fetch Tugas Khusus Dosen yang Login pada Semester Aktif
     const { data: tugasData } = await supabase
       .from('tugas')
       .select('*, mata_kuliah(id, nama_mk), mahasiswa(id, nama_mahasiswa, nim)')
       .eq('dosen_id', user.id)
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString())
       .order('created_at', { ascending: false });
 
     if (tugasData) {
@@ -142,6 +169,10 @@ export default function ManajemenTugasDosen() {
           <div className="max-w-xl">
             <h1 className="text-3xl md:text-4xl font-black text-[#1A365D] mb-2 tracking-tight">Penugasan Mahasiswa</h1>
             <p className="text-sm font-semibold text-gray-400">Kelola daftar tugas untuk setiap mata kuliah secara real-time.</p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 border border-blue-100">
+              <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Periode Aktif: Semester {semesterPeriod.label}</span>
+            </div>
           </div>
           <Link 
             href="/dosen/tugas/buat"
