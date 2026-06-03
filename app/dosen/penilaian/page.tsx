@@ -69,6 +69,7 @@ export default function PenilaianTugasDosen() {
 
   const [activePage, setActivePage] = useState(1);
   const itemsPerPage = 4;
+  const initialFetchDone = React.useRef(false);
 
   const showNotify = (msg: string) => {
     setNotification({ show: true, msg });
@@ -81,7 +82,9 @@ export default function PenilaianTugasDosen() {
 
   useEffect(() => {
     if (selectedMK) {
-      fetchStudents(selectedMK);
+      if (initialFetchDone.current) {
+        fetchStudents(selectedMK);
+      }
     }
   }, [selectedMK]);
 
@@ -127,8 +130,12 @@ export default function PenilaianTugasDosen() {
       });
 
       setMkList(uniqueMks);
-      if (uniqueMks.length > 0) setSelectedMK(uniqueMks[0].id);
+      if (uniqueMks.length > 0) {
+        setSelectedMK(uniqueMks[0].id);
+        await fetchStudents(uniqueMks[0].id); // Langsung fetch tanpa menunggu useEffect
+      }
     }
+    initialFetchDone.current = true;
     setLoading(false);
   };
 
