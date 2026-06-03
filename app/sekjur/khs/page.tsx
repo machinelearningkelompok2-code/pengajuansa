@@ -8,6 +8,58 @@ import Swal from 'sweetalert2';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
+// Helper: dapatkan label semester dari suatu tanggal
+function getSemesterPeriodFromDate(date: Date) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // 1-12
+  if (month >= 1 && month <= 6) {
+    return `Genap ${year - 1}/${year}`;
+  } else {
+    return `Ganjil ${year}/${year + 1}`;
+  }
+}
+
+// Helper: dapatkan rentang waktu dari label semester
+function parseSemesterPeriodLabel(label: string) {
+  const parts = label.split(' ');
+  const type = parts[0]; // Genap or Ganjil
+  const years = parts[1].split('/'); // ["2024", "2025"]
+  const yearStart = parseInt(years[0]);
+  const yearEnd = parseInt(years[1]);
+
+  if (type === 'Genap') {
+    return {
+      start: new Date(yearEnd, 0, 1),
+      end: new Date(yearEnd, 5, 30, 23, 59, 59),
+    };
+  } else {
+    return {
+      start: new Date(yearStart, 6, 1),
+      end: new Date(yearStart, 11, 31, 23, 59, 59),
+    };
+  }
+}
+
 // ─── Icons ────────────────────────────────────────────────────
 const DownloadIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -55,6 +107,10 @@ export default function KhsSekjurPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sekjurUser, setSekjurUser] = useState<any>(null);
+  
+  // State filter semester
+  const [selectedSemester, setSelectedSemester] = useState<string>('');
+  const [semesterOptions, setSemesterOptions] = useState<string[]>([]);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -64,14 +120,34 @@ export default function KhsSekjurPage() {
 
   useEffect(() => {
     const q = search.toLowerCase();
-    setFiltered(
-      records.filter(r =>
+    
+    let startLimit: Date | null = null;
+    let endLimit: Date | null = null;
+    if (selectedSemester) {
+      const range = parseSemesterPeriodLabel(selectedSemester);
+      startLimit = range.start;
+      endLimit = range.end;
+    }
+
+    const filteredList = records.filter(r => {
+      // 1. Filter Pencarian
+      const matchesSearch = 
         r.mahasiswa?.nama_mahasiswa?.toLowerCase().includes(q) ||
         r.mahasiswa?.nim?.toLowerCase().includes(q) ||
-        r.items?.[0]?.mata_kuliah?.nama_mk?.toLowerCase().includes(q)
-      )
-    );
-  }, [search, records]);
+        r.items?.[0]?.mata_kuliah?.nama_mk?.toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+
+      // 2. Filter Semester
+      if (startLimit && endLimit && r.created_at) {
+        const date = new Date(r.created_at);
+        return date >= startLimit && date <= endLimit;
+      }
+      return true;
+    });
+
+    setFiltered(filteredList);
+  }, [search, records, selectedSemester]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -80,6 +156,7 @@ export default function KhsSekjurPage() {
       .select(`
         id,
         mahasiswa_id,
+        created_at,
         mahasiswa:mahasiswa_id(nama_mahasiswa, nim, prodi, jurusan, ipk, semester),
         items:pendaftaran_items(
           id,
@@ -92,7 +169,27 @@ export default function KhsSekjurPage() {
       .in('status', ['Approved', 'KHS_Forwarded', 'KHS_Diterima'])
       .order('created_at', { ascending: false });
 
-    if (!error && data) setRecords(data);
+    if (!error && data) {
+      setRecords(data);
+      
+      // Hitung opsi semester dari data
+      const currentPeriod = getCurrentSemesterPeriod();
+      const periodsSet = new Set<string>();
+      periodsSet.add(currentPeriod.label);
+
+      data.forEach((r: any) => {
+        if (r.created_at) {
+          const pLabel = getSemesterPeriodFromDate(new Date(r.created_at));
+          periodsSet.add(pLabel);
+        }
+      });
+
+      const options = Array.from(periodsSet).sort();
+      setSemesterOptions(options);
+      
+      // Default pilih semester aktif
+      setSelectedSemester(prev => prev || currentPeriod.label);
+    }
     setLoading(false);
   };
 
@@ -414,17 +511,34 @@ export default function KhsSekjurPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 border-b border-gray-50">
             <div>
               <h3 className="text-base font-bold text-[#1A365D]">Daftar KHS Mahasiswa</h3>
-              <p className="text-[11px] text-gray-400 mt-0.5">Hanya menampilkan pendaftaran yang telah berstatus <span className="font-black text-green-600">Approved</span></p>
+              <p className="text-[11px] text-gray-400 mt-0.5 font-bold">Menampilkan KHS untuk Periode: <span className="text-blue-600 font-black">Semester {selectedSemester}</span></p>
             </div>
-            <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><SearchIcon /></div>
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Cari nama, NIM, atau mata kuliah..."
-                className="w-full sm:w-72 rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-4 text-sm font-medium text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
-              />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* Dropdown Pilihan Semester */}
+              <div className="relative">
+                <select
+                  value={selectedSemester}
+                  onChange={e => setSelectedSemester(e.target.value)}
+                  className="w-full sm:w-48 rounded-xl border border-gray-200 bg-gray-50 py-2.5 px-4 text-xs font-black text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all uppercase tracking-wider"
+                >
+                  {semesterOptions.map(opt => (
+                    <option key={opt} value={opt}>
+                      Semester {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><SearchIcon /></div>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Cari nama, NIM, atau mata kuliah..."
+                  className="w-full sm:w-72 rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-4 text-xs font-medium text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
+                />
+              </div>
             </div>
           </div>
 
