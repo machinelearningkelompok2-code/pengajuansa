@@ -136,19 +136,24 @@ export default function PenilaianTugasDosen() {
 
   const fetchStudents = async (mkId: string) => {
     setLoading(true);
-    // Ambil daftar mahasiswa di MK ini
-    const { data } = await supabase
-      .from('pendaftaran_items')
-      .select('*, pendaftaran_sa(mahasiswa:mahasiswa_id(id, nama_mahasiswa, nim, prodi))')
-      .eq('mk_id', mkId);
+    
+    // Jalankan kedua query secara paralel menggunakan Promise.all untuk mempercepat loading
+    const [pendaftaranRes, tugasRes] = await Promise.all([
+      supabase
+        .from('pendaftaran_items')
+        .select('*, pendaftaran_sa(mahasiswa:mahasiswa_id(id, nama_mahasiswa, nim, prodi))')
+        .eq('mk_id', mkId),
+      
+      supabase
+        .from('tugas')
+        .select('mahasiswa_id, pengumpulan_tugas(nilai, file_url)')
+        .eq('mk_id', mkId)
+        .gte('created_at', semesterPeriod.start.toISOString())
+        .lte('created_at', semesterPeriod.end.toISOString())
+    ]);
 
-    // Fetch tugas and pengumpulan
-    const { data: tugasData } = await supabase
-      .from('tugas')
-      .select('mahasiswa_id, pengumpulan_tugas(nilai, file_url)')
-      .eq('mk_id', mkId)
-      .gte('created_at', semesterPeriod.start.toISOString())
-      .lte('created_at', semesterPeriod.end.toISOString());
+    const data = pendaftaranRes.data;
+    const tugasData = tugasRes.data;
 
     if (data) {
       const rawList = data.map((d: any) => {
