@@ -57,7 +57,7 @@ export default function KaprodiLayout({ children, topbarTitle }: KaprodiLayoutPr
 
         <footer className="mt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between border-t border-gray-200 py-6 px-4 md:px-8 text-[10px] font-bold text-gray-400 gap-2">
           <p className="uppercase tracking-widest">
-            © 2026 POLITEKNIK NEGERI MANADO. KAPRODI PORTAL.
+            © {new Date().getFullYear()} POLITEKNIK NEGERI MANADO. KAPRODI PORTAL.
           </p>
         </footer>
       </div>

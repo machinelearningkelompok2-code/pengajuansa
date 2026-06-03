@@ -18,10 +18,35 @@ const UserPlusIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-orange-500"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
 );
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
 export default function KaprodiDashboard() {
   const [notification, setNotification] = useState<{show: boolean, msg: string}>({show: false, msg: ""});
   const [loading, setLoading] = useState(true);
   const [kaprodiName, setKaprodiName] = useState('Kaprodi Sistem Informasi');
+  
+  const semesterPeriod = getCurrentSemesterPeriod();
   
   // Data State
   const [forms, setForms] = useState<any[]>([]);
@@ -52,7 +77,7 @@ export default function KaprodiDashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
 
-    // 1. Fetch Formulir Menunggu Validasi Kaprodi (Status: Approved oleh Sekjur)
+    // 1. Fetch Formulir Menunggu Validasi Kaprodi pada Semester Aktif (Status: Approved oleh Sekjur)
     const { data: pendaftaranData } = await supabase
       .from('pendaftaran_sa')
       .select(`
@@ -63,20 +88,36 @@ export default function KaprodiDashboard() {
         )
       `)
       .eq('status', 'Approved')
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString())
       .order('created_at', { ascending: false });
 
-    // 2. Fetch Total Mahasiswa (dari tabel mahasiswa langsung)
-    const { count: mCount } = await supabase
-      .from('mahasiswa')
-      .select('*', { count: 'exact', head: true });
-    const totalMahasiswa = mCount || 0;
+    // 2. Fetch Total Mahasiswa SA yang Terdaftar pada Semester Aktif
+    const { data: activeStudents } = await supabase
+      .from('pendaftaran_sa')
+      .select('mahasiswa_id')
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString());
+    const totalMahasiswa = new Set(activeStudents?.map(s => s.mahasiswa_id)).size;
 
-    // 3. Fetch Alokasi Dosen Stats
+    // 3. Fetch Alokasi Dosen Stats pada Semester Aktif
     const { data: allMK } = await supabase.from('mata_kuliah').select('id');
-    const { data: allAlokasi } = await supabase.from('alokasi_dosen').select('mk_id');
+    const { data: allAlokasi } = await supabase
+      .from('alokasi_dosen')
+      .select(`
+        mk_id,
+        pendaftaran_sa (created_at)
+      `);
     
+    const activeAlokasi = (allAlokasi || []).filter((a: any) => {
+      const createdAtStr = (a.pendaftaran_sa as any)?.created_at;
+      if (!createdAtStr) return false;
+      const date = new Date(createdAtStr);
+      return date >= semesterPeriod.start && date <= semesterPeriod.end;
+    });
+
     const totalMataKuliah = allMK?.length || 0;
-    const allocatedMK = new Set(allAlokasi?.map(a => a.mk_id)).size;
+    const allocatedMK = new Set(activeAlokasi.map(a => a.mk_id)).size;
     const persen = totalMataKuliah > 0 ? Math.round((allocatedMK / totalMataKuliah) * 100) : 0;
 
     if (pendaftaranData) setForms(pendaftaranData.slice(0, 4));
@@ -155,7 +196,7 @@ export default function KaprodiDashboard() {
             <div className="relative z-10">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-300 mb-4">Total Mahasiswa SA</p>
               <span className="text-5xl md:text-6xl font-black">{stats.totalMahasiswa}</span>
-              <p className="text-[10px] text-blue-400 mt-4 font-bold uppercase tracking-widest bg-white/5 w-fit px-3 py-1 rounded-lg">TA 2023/2024 - Genap</p>
+              <p className="text-[10px] text-blue-400 mt-4 font-bold uppercase tracking-widest bg-white/5 w-fit px-3 py-1 rounded-lg">Semester {semesterPeriod.label}</p>
             </div>
             <div className="absolute -bottom-6 -right-6 opacity-10 group-hover:scale-125 group-hover:opacity-20 transition-all duration-700 z-0">
               <svg width="180" height="180" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/><path d="M19 13.5v1.65l-7 3.82-7-3.82v-1.65l7 3.82 7-3.82z"/></svg>
