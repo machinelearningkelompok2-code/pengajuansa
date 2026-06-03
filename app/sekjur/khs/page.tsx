@@ -82,7 +82,9 @@ export default function KhsSekjurPage() {
         mahasiswa_id,
         mahasiswa:mahasiswa_id(nama_mahasiswa, nim, prodi, jurusan, ipk, semester),
         items:pendaftaran_items(
-          *,
+          id,
+          nilai_lama,
+          nilai_akhir,
           mata_kuliah:mk_id(kode_mk, nama_mk, sks, semester_asal)
         ),
         status
@@ -182,7 +184,7 @@ export default function KhsSekjurPage() {
         if (sub && sub.nilai !== null) { sum += parseFloat(sub.nilai); cnt++; }
       });
       
-      let score = 85;
+      let score = 0; // Default to 0 instead of 85
       if (item.nilai_akhir !== null && item.nilai_akhir !== undefined) {
         score = parseFloat(item.nilai_akhir);
       } else if (cnt > 0) {

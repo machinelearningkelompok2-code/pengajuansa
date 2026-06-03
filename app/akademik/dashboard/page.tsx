@@ -35,23 +35,19 @@ const getSemesterText = (sem: number) => {
   return romawi[sem - 1] || sem.toString();
 };
 
-const gradeFromScore = (score: number): string => {
-  if (score >= 80) return 'A';
-  if (score >= 70) return 'B';
-  if (score >= 60) return 'C';
-  if (score >= 50) return 'D';
-  return 'E';
-};
+function gradeFromScore(score: number) {
+  if (score >= 85) return { huruf: 'A', angka: 4.00 };
+  if (score >= 80) return { huruf: 'A-', angka: 3.70 };
+  if (score >= 75) return { huruf: 'B+', angka: 3.30 };
+  if (score >= 70) return { huruf: 'B', angka: 3.00 };
+  if (score >= 65) return { huruf: 'B-', angka: 2.70 };
+  if (score >= 60) return { huruf: 'C+', angka: 2.30 };
+  if (score >= 55) return { huruf: 'C', angka: 2.00 };
+  if (score >= 40) return { huruf: 'D', angka: 1.00 };
+  return { huruf: 'E', angka: 0.00 };
+}
 
-const bobotFromGrade = (grade: string): number => {
-  switch (grade) {
-    case 'A': return 4;
-    case 'B': return 3;
-    case 'C': return 2;
-    case 'D': return 1;
-    default: return 0;
-  }
-};
+// removed old bobotFromGrade
 
 export default function AkademikDashboardPage() {
   const [records, setRecords] = useState<any[]>([]);
@@ -86,7 +82,9 @@ export default function AkademikDashboardPage() {
         mahasiswa_id,
         mahasiswa:mahasiswa_id(nama_mahasiswa, nim, prodi, jurusan, ipk, semester),
         items:pendaftaran_items(
-          *,
+          id,
+          nilai_lama,
+          nilai_akhir,
           mata_kuliah:mk_id(kode_mk, nama_mk, sks, semester_asal)
         ),
         status
@@ -131,7 +129,7 @@ export default function AkademikDashboardPage() {
         if (sub && sub.nilai !== null) { sum += parseFloat(sub.nilai); cnt++; }
       });
       
-      let score = 85;
+      let score = 0; // Default to 0 instead of 85 so if missing, it shows E
       if (item.nilai_akhir !== null && item.nilai_akhir !== undefined) {
         score = parseFloat(item.nilai_akhir);
       } else if (cnt > 0) {
@@ -140,7 +138,7 @@ export default function AkademikDashboardPage() {
       
       const grade = gradeFromScore(score);
       const sksVal = mk?.sks || 0;
-      const bbtVal = bobotFromGrade(grade);
+      const bbtVal = grade.angka;
       const rowBobot = sksVal * bbtVal;
 
       totalSks += sksVal;
@@ -151,9 +149,9 @@ export default function AkademikDashboardPage() {
         kode: mk?.kode_mk || '-',
         nama: mk?.nama_mk || '-',
         sks: sksVal,
-        huruf: grade,
-        angka: bbtVal,
-        bobot: rowBobot
+        huruf: grade.huruf,
+        angka: bbtVal.toFixed(2),
+        bobot: rowBobot.toFixed(2)
       };
     });
 
