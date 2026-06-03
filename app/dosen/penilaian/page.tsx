@@ -5,6 +5,31 @@ import DosenLayout from '../../../components/DosenLayout';
 import { supabase } from '../../../supabase/lib/supabase';
 import Swal from 'sweetalert2';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Februari - Juli
+  // Semester Ganjil: Agustus - Januari
+  if (month >= 2 && month <= 7) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 1, 1), // 1 Feb
+      end: new Date(year, 6, 31, 23, 59, 59), // 31 Jul
+    };
+  } else {
+    // Aug-Dec = same year, Jan = previous cycle
+    const startYear = month >= 8 ? year : year - 1;
+    return {
+      label: `Ganjil ${startYear}/${startYear + 1}`,
+      start: new Date(startYear, 7, 1), // 1 Aug
+      end: new Date(startYear + 1, 0, 31, 23, 59, 59), // 31 Jan
+    };
+  }
+}
+
 const ChevronDownIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
 );
@@ -118,17 +143,28 @@ export default function PenilaianTugasDosen() {
       .eq('mk_id', mkId);
 
     if (data) {
-      const list = data.map((d: any) => {
+      const rawList = data.map((d: any) => {
         const mhs = (d.pendaftaran_sa as any)?.mahasiswa;
         if (mhs) {
            return { ...mhs, pendaftaran_item_id: d.id, nilai_akhir: d.nilai_akhir };
         }
         return null;
       }).filter(Boolean);
-      setMhsList(list);
+
+      // Deduplikasi: hanya tampilkan 1 entry per mahasiswa (berdasarkan id)
+      const seen = new Set<string>();
+      const uniqueList = rawList.filter((mhs: any) => {
+        if (seen.has(mhs.id)) return false;
+        seen.add(mhs.id);
+        return true;
+      });
+
+      setMhsList(uniqueList);
     }
     setLoading(false);
   };
+
+  const semesterPeriod = getCurrentSemesterPeriod();
 
   const fetchTugasMahasiswa = async (mhsId: string, mkId: string) => {
     setLoading(true);
@@ -137,6 +173,8 @@ export default function PenilaianTugasDosen() {
       .select('*, pengumpulan_tugas(*)')
       .eq('mk_id', mkId)
       .eq('mahasiswa_id', mhsId)
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString())
       .order('created_at', { ascending: false });
 
     if (data) {
@@ -299,6 +337,10 @@ export default function PenilaianTugasDosen() {
           <div className="max-w-xl">
             <h1 className="text-3xl md:text-4xl font-black text-[#1A365D] mb-3 md:mb-4 tracking-tight">Penilaian Mahasiswa</h1>
             <p className="text-sm font-semibold text-gray-400">Kelola tugas dan berikan penilaian khusus untuk setiap mahasiswa secara mandiri.</p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 border border-blue-100">
+              <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Periode Aktif: Semester {semesterPeriod.label}</span>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 w-full md:w-auto">
