@@ -5,6 +5,29 @@ import KaprodiLayout from '../../../components/KaprodiLayout';
 import { supabase } from '../../../supabase/lib/supabase';
 import Swal from 'sweetalert2';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
 const ChevronDownIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
 );
@@ -112,6 +135,8 @@ export default function AlokasiDosenKaprodi() {
 
   const [allocatedCount, setAllocatedCount] = useState(0);
   const [totalMK, setTotalMK] = useState(0);
+  
+  const semesterPeriod = getCurrentSemesterPeriod();
 
   useEffect(() => {
     fetchAlokasiData();
@@ -124,20 +149,29 @@ export default function AlokasiDosenKaprodi() {
     const { data: dosens } = await supabase.from('users').select('id, nama_lengkap, prodi').eq('role', 'dosen');
     if (dosens) setDosenList(dosens);
 
-    // 2. Fetch Alokasi (Termasuk master pengampu & alokasi mahasiswa)
+    // 2. Fetch Alokasi (Termasuk master pengampu & alokasi mahasiswa) pada Semester Aktif
     const { data: alokasis } = await supabase.from('alokasi_dosen').select(`
       id, mk_id, dosen_id, pendaftaran_id,
-      dosen:dosen_id (id, nama_lengkap)
+      dosen:dosen_id (id, nama_lengkap),
+      pendaftaran_sa (created_at)
     `);
 
+    const activeAlokasis = (alokasis || []).filter((a: any) => {
+      if (!a.pendaftaran_id) return true; // keep master
+      const createdAtStr = (a.pendaftaran_sa as any)?.created_at;
+      if (!createdAtStr) return false;
+      const date = new Date(createdAtStr);
+      return date >= semesterPeriod.start && date <= semesterPeriod.end;
+    });
+
     // Master Pengampu: Alokasi yang pendaftaran_id-nya NULL
-    const masterPengampu = alokasis?.filter(a => !a.pendaftaran_id) || [];
+    const masterPengampu = activeAlokasis.filter(a => !a.pendaftaran_id);
 
     // we need to keep track of both mk_id and pendaftaran_id to make it unique per student
-    const allocatedPairs = alokasis?.map(a => `${a.mk_id}-${a.pendaftaran_id}`) || [];
+    const allocatedPairs = activeAlokasis.map(a => `${a.mk_id}-${a.pendaftaran_id}`);
     setAllocatedMkIds(allocatedPairs);
 
-    // 3. Fetch Pengajuan SA dari menu formulir SA
+    // 3. Fetch Pengajuan SA dari menu formulir SA pada Semester Aktif
     const { data: applications } = await supabase.from('pendaftaran_sa').select(`
       id,
       kode_pendaftaran,
@@ -150,6 +184,8 @@ export default function AlokasiDosenKaprodi() {
       pembayaran(id)
     `)
       .eq('status', 'Approved')
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString())
       .order('created_at', { ascending: false });
 
     // Tampilkan SEMUA pendaftaran yang sudah Approved (dari alur mahasiswa maupun formulir Sekjur)
@@ -161,19 +197,19 @@ export default function AlokasiDosenKaprodi() {
       const requestedItems = app.items || [];
 
       return requestedItems.map((item: any) => {
-        const isAllocated = allocatedPairs.includes(`${item.mk_id}-${app.id}`);
-        const allocation = alokasis?.find((a: any) => a.mk_id === item.mk_id && a.pendaftaran_id === app.id);
-
-        let lecturerObj = null;
-        if (allocation && allocation.dosen) {
-          const dosenData = Array.isArray(allocation.dosen)
-            ? allocation.dosen[0] as { nama_lengkap: string }
-            : allocation.dosen as { nama_lengkap: string };
-
-          const loadSKS = alokasis?.filter((a: any) => a.dosen_id === allocation.dosen_id).reduce((sum: number, a: any) => {
-            const reqItem = allRequestedItems.find((i: any) => i.mk_id === a.mk_id);
-            return sum + (reqItem?.mata_kuliah?.sks || 0);
-          }, 0) || 0;
+          const isAllocated = allocatedPairs.includes(`${item.mk_id}-${app.id}`);
+          const allocation = activeAlokasis.find((a: any) => a.mk_id === item.mk_id && a.pendaftaran_id === app.id);
+ 
+          let lecturerObj = null;
+          if (allocation && allocation.dosen) {
+            const dosenData = Array.isArray(allocation.dosen)
+              ? allocation.dosen[0] as { nama_lengkap: string }
+              : allocation.dosen as { nama_lengkap: string };
+ 
+            const loadSKS = activeAlokasis.filter((a: any) => a.dosen_id === allocation.dosen_id).reduce((sum: number, a: any) => {
+              const reqItem = allRequestedItems.find((i: any) => i.mk_id === a.mk_id);
+              return sum + (reqItem?.mata_kuliah?.sks || 0);
+            }, 0) || 0;
 
           lecturerObj = {
             id: allocation.dosen_id,
@@ -210,7 +246,7 @@ export default function AlokasiDosenKaprodi() {
 
     // Mapping Beban Kerja Dosen (Sidebar & Modal)
     const allMappedBeban = dosens?.map(d => {
-      const loadSKS = alokasis?.filter(a => a.dosen_id === d.id).reduce((sum: number, a: any) => {
+      const loadSKS = activeAlokasis.filter(a => a.dosen_id === d.id).reduce((sum: number, a: any) => {
         const item = allRequestedItems.find((i: any) => i.mk_id === a.mk_id);
         return sum + (item?.mata_kuliah?.sks || 0);
       }, 0) || 0;
@@ -298,7 +334,7 @@ export default function AlokasiDosenKaprodi() {
   const topbarTitle = (
     <div className="flex flex-wrap items-center gap-2">
       <h2 className="m-0 text-base md:text-xl font-extrabold text-[#0F172A]">Alokasi Dosen Pengajar</h2>
-      <span className="rounded-full bg-yellow-100 px-3 py-1 text-[9px] md:text-[10px] font-black tracking-[0.15em] text-yellow-800 uppercase border border-yellow-200">SEMESTER ANTARA 2024</span>
+      <span className="rounded-full bg-yellow-100 px-3 py-1 text-[9px] md:text-[10px] font-black tracking-[0.15em] text-yellow-800 uppercase border border-yellow-200">SEMESTER {semesterPeriod.label}</span>
     </div>
   );
 
@@ -446,7 +482,7 @@ export default function AlokasiDosenKaprodi() {
                       ) : (
                         <span className="rounded-xl bg-green-50 px-3 py-1.5 text-[9px] font-black text-green-700 uppercase tracking-[0.15em] border border-green-100">TERALOKASI</span>
                       )}
-                      <span className="text-[10px] font-black text-gray-300 tracking-[0.25em] uppercase italic">SA-2024</span>
+                      <span className="text-[10px] font-black text-gray-300 tracking-[0.25em] uppercase italic">SA {semesterPeriod.label}</span>
                     </div>
                     <h3 className="text-lg md:text-2xl font-black text-[#0F172A] mb-1 md:mb-2 tracking-tight group-hover:text-blue-900 transition-colors">{c.studentName}</h3>
                     <p className="text-sm font-bold text-gray-500 mb-3">{c.mkName}</p>
