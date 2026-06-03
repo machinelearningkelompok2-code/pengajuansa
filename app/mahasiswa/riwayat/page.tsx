@@ -4,9 +4,34 @@ import React, { useEffect, useState } from 'react';
 import MainLayout from '../../../components/MainLayout';
 import { supabase } from '../../../supabase/lib/supabase';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
 export default function RiwayatAkademikPage() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const semesterPeriod = getCurrentSemesterPeriod();
 
   useEffect(() => {
     fetchHistory();
@@ -18,7 +43,9 @@ export default function RiwayatAkademikPage() {
     if (!userStr) return;
     const user = JSON.parse(userStr);
 
-    // Fetch data pendaftaran yang terhubung dengan mata kuliah yang diambil
+    const semesterPeriod = getCurrentSemesterPeriod();
+
+    // Fetch data pendaftaran yang terhubung dengan mata kuliah yang diambil pada Semester Aktif
     const { data, error } = await supabase
       .from('pendaftaran_sa')
       .select(`
@@ -28,6 +55,8 @@ export default function RiwayatAkademikPage() {
         )
       `)
       .eq('mahasiswa_id', user.id)
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString())
       .order('created_at', { ascending: false });
 
     if (!error) {
@@ -47,10 +76,14 @@ export default function RiwayatAkademikPage() {
         <div className="relative overflow-hidden rounded-[2rem] md:rounded-[2.5rem] bg-[#0F172A] p-8 md:p-12 text-white shadow-xl">
           <div className="relative z-10 max-w-2xl">
             <h1 className="text-2xl md:text-4xl font-black mb-3 md:mb-4">Riwayat Pengajuan</h1>
-            <p className="text-xs md:text-sm text-gray-400 font-medium leading-relaxed">
+            <p className="text-xs md:text-sm text-gray-400 font-medium leading-relaxed mb-4">
               Daftar seluruh riwayat pendaftaran Semester Antara Anda. 
               Gunakan informasi ini untuk memantau status verifikasi dan bukti pembayaran.
             </p>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 border border-white/20 backdrop-blur-md">
+              <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-[10px] font-black text-white uppercase tracking-widest">Periode Aktif: Semester {semesterPeriod.label}</span>
+            </div>
           </div>
           <div className="absolute -bottom-10 -right-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl"></div>
         </div>
