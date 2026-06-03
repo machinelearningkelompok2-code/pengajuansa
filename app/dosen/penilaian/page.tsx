@@ -40,6 +40,14 @@ const SaveIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
 );
 
+const CloseIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+);
+
+const BellIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+);
+
 export default function PenilaianTugasDosen() {
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<{ show: boolean, msg: string }>({ show: false, msg: "" });
@@ -57,6 +65,7 @@ export default function PenilaianTugasDosen() {
   // State for Add Task Modal
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
   const [newTask, setNewTask] = useState({
     judul: "",
     deskripsi: "",
@@ -286,44 +295,6 @@ export default function PenilaianTugasDosen() {
     }
   };
 
-  const openFile = (base64Data: string) => {
-    try {
-      // Jika bukan base64 (misal URL asli), langsung buka
-      if (!base64Data.startsWith('data:')) {
-        window.open(base64Data, '_blank');
-        return;
-      }
-
-      // Konversi Base64 ke Blob agar bisa dibuka di tab baru dengan lancar
-      const parts = base64Data.split(';base64,');
-      const contentType = parts[0].split(':')[1];
-      const raw = window.atob(parts[1]);
-      const rawLength = raw.length;
-      const uInt8Array = new Uint8Array(rawLength);
-
-      for (let i = 0; i < rawLength; ++i) {
-        uInt8Array[i] = raw.charCodeAt(i);
-      }
-
-      const blob = new Blob([uInt8Array], { type: contentType });
-      const url = URL.createObjectURL(blob);
-
-      // Buka di tab baru
-      const newWindow = window.open(url, '_blank');
-
-      // Bersihkan memory setelah tab ditutup (opsional)
-      if (newWindow) {
-        newWindow.onload = () => {
-          setTimeout(() => URL.revokeObjectURL(url), 100);
-        };
-      }
-    } catch (e) {
-      console.error("Gagal membuka file:", e);
-      // Fallback: coba buka langsung
-      window.open(base64Data, '_blank');
-    }
-  };
-
   const handleUpdateScore = async (tugasId: string, mhsId: string, score: string) => {
     if (score === "") return;
 
@@ -458,12 +429,20 @@ export default function PenilaianTugasDosen() {
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{mhs.nim}</p>
                     <p className="text-[10px] font-semibold text-gray-400 mt-0.5">{mhs.prodi || 'Informatika'}</p>
                   </div>
-                  <button
-                    onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
-                    className="shrink-0 rounded-xl bg-gray-100 px-3 py-2.5 text-[10px] font-black text-gray-600 hover:bg-[#1A365D] hover:text-white transition-all uppercase tracking-widest"
-                  >
-                    Kelola
-                  </button>
+                  <div className="flex flex-col gap-2 mt-4">
+                    <button
+                      onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
+                      className="w-full rounded-xl bg-[#FACC15] px-4 py-3 text-[10px] font-black text-[#1A365D] hover:bg-[#FDE047] transition-colors shadow-sm uppercase tracking-widest"
+                    >
+                      Detail & Penilaian
+                    </button>
+                    <button
+                      onClick={() => handleSendReminder(mhs)}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-white border-2 border-red-100 px-4 py-3 text-[10px] font-black text-red-500 hover:bg-red-50 transition-colors shadow-sm uppercase tracking-widest"
+                    >
+                      <BellIcon /> Kirim Pengingat
+                    </button>
+                  </div>
                 </div>
               );
             }) : (
@@ -512,12 +491,21 @@ export default function PenilaianTugasDosen() {
                         <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700">Terdaftar</span>
                       </td>
                       <td className="px-6 py-6 text-right">
-                        <button
-                          onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
-                          className="rounded-xl bg-gray-100 px-5 py-3 text-[10px] font-black text-gray-600 hover:bg-[#1A365D] hover:text-white transition-all uppercase tracking-widest"
-                        >
-                          Kelola Tugas & Nilai
-                        </button>
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            onClick={() => handleSendReminder(mhs)}
+                            title="Kirim Email Pengingat"
+                            className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 hover:scale-105 transition-all"
+                          >
+                            <BellIcon />
+                          </button>
+                          <button
+                            onClick={() => { setSelectedMhs(mhs); setIsDetailModalOpen(true); }}
+                            className="rounded-xl bg-[#1A365D] px-6 py-2.5 text-[10px] font-black text-white hover:bg-blue-900 transition-colors uppercase tracking-widest shadow-lg shadow-blue-900/20"
+                          >
+                            Kelola Nilai
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -675,7 +663,41 @@ export default function PenilaianTugasDosen() {
           </div>
         )}
 
-        {/* Add Task Modal */}
+        {/* In-App Document Preview Modal */}
+        {previewFile && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0F172A]/90 backdrop-blur-md p-4 sm:p-8 transition-all">
+            <div className="relative w-full max-w-5xl h-[90vh] rounded-[2rem] bg-white shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 bg-gray-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                    <PaperclipIcon />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-[#1A365D]">Preview Dokumen</h3>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Tampilan Langsung</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={previewFile} download="Berkas_Tugas" className="rounded-xl bg-blue-50 px-4 py-2 text-[10px] font-black text-blue-600 hover:bg-blue-100 transition-colors uppercase tracking-widest flex items-center gap-2">
+                    <SaveIcon /> Unduh
+                  </a>
+                  <button onClick={() => setPreviewFile(null)} className="rounded-xl bg-red-50 p-2 text-red-500 hover:bg-red-100 transition-colors">
+                    <CloseIcon />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-grow bg-gray-200/50 relative">
+                <iframe 
+                  src={previewFile} 
+                  className="w-full h-full border-none"
+                  title="Document Preview"
+                ></iframe>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Tambah Tugas */}
         {isTaskModalOpen && (
           <div className="fixed inset-0 z-[130] flex items-center justify-center bg-[#0F172A]/90 backdrop-blur-md p-4">
             <div className="w-full max-w-md rounded-[2.5rem] bg-white p-10 shadow-2xl animate-in zoom-in-95 duration-200">
