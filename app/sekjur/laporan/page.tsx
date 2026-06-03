@@ -4,13 +4,81 @@ import React, { useEffect, useState } from 'react';
 import SekjurLayout from '../../../components/SekjurLayout';
 import { supabase } from '../../../supabase/lib/supabase';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1),
+      end: new Date(year, 5, 30, 23, 59, 59),
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1),
+      end: new Date(year, 11, 31, 23, 59, 59),
+    };
+  }
+}
+
+// Helper: dapatkan label semester dari suatu tanggal
+function getSemesterPeriodFromDate(date: Date) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  if (month >= 1 && month <= 6) {
+    return `Genap ${year - 1}/${year}`;
+  } else {
+    return `Ganjil ${year}/${year + 1}`;
+  }
+}
+
+// Helper: dapatkan rentang waktu dari label semester
+function parseSemesterPeriodLabel(label: string) {
+  const parts = label.split(' ');
+  const type = parts[0];
+  const years = parts[1].split('/');
+  const yearStart = parseInt(years[0]);
+  const yearEnd = parseInt(years[1]);
+  if (type === 'Genap') {
+    return {
+      start: new Date(yearEnd, 0, 1),
+      end: new Date(yearEnd, 5, 30, 23, 59, 59),
+    };
+  } else {
+    return {
+      start: new Date(yearStart, 6, 1),
+      end: new Date(yearStart, 11, 31, 23, 59, 59),
+    };
+  }
+}
+
 export default function LaporanSemesterPage() {
   const [loading, setLoading] = useState(true);
+  const [allData, setAllData] = useState<any[]>([]);
   const [reportData, setReportData] = useState<any[]>([]);
+
+  // Filter semester
+  const [selectedSemester, setSelectedSemester] = useState<string>('');
+  const [semesterOptions, setSemesterOptions] = useState<string[]>([]);
 
   useEffect(() => {
     fetchReportData();
   }, []);
+
+  // Re-filter saat semester berubah
+  useEffect(() => {
+    if (!selectedSemester || allData.length === 0) return;
+    const range = parseSemesterPeriodLabel(selectedSemester);
+    const filtered = allData.filter(item => {
+      if (!item.created_at) return false;
+      const date = new Date(item.created_at);
+      return date >= range.start && date <= range.end;
+    });
+    setReportData(filtered);
+  }, [selectedSemester, allData]);
 
   const fetchReportData = async () => {
     setLoading(true);
@@ -28,7 +96,31 @@ export default function LaporanSemesterPage() {
       .order('created_at', { ascending: false });
 
     if (data && !error) {
-      setReportData(data);
+      setAllData(data);
+
+      // Hitung opsi semester dari data
+      const currentPeriod = getCurrentSemesterPeriod();
+      const periodsSet = new Set<string>();
+      periodsSet.add(currentPeriod.label);
+      data.forEach((r: any) => {
+        if (r.created_at) {
+          periodsSet.add(getSemesterPeriodFromDate(new Date(r.created_at)));
+        }
+      });
+      const options = Array.from(periodsSet).sort();
+      setSemesterOptions(options);
+
+      // Default ke semester aktif
+      const activeSem = currentPeriod.label;
+      setSelectedSemester(activeSem);
+
+      // Filter awal
+      const range = parseSemesterPeriodLabel(activeSem);
+      setReportData(data.filter(item => {
+        if (!item.created_at) return false;
+        const date = new Date(item.created_at);
+        return date >= range.start && date <= range.end;
+      }));
     }
     setLoading(false);
   };
@@ -40,7 +132,7 @@ export default function LaporanSemesterPage() {
   const topbarTitle = (
     <div>
       <h2 className="m-0 text-xl font-extrabold text-[#1A365D]">Laporan Semester Antara</h2>
-      <p className="text-xs font-semibold text-gray-500">Rekapitulasi Mahasiswa Terdaftar & Disetujui</p>
+      <p className="text-xs font-semibold text-gray-500">Rekapitulasi Mahasiswa Terdaftar &amp; Disetujui</p>
     </div>
   );
 
@@ -51,22 +143,53 @@ export default function LaporanSemesterPage() {
         {/* Header Laporan (Hanya muncul saat print) */}
         <div className="hidden print:block text-center mb-8">
           <h1 className="text-2xl font-bold text-black uppercase tracking-widest">LAPORAN SEMESTER ANTARA</h1>
-          <p className="text-sm font-semibold text-gray-600 uppercase mt-1">Politeknik Negeri Manado</p>
+          <p className="text-sm font-semibold text-gray-600 uppercase mt-1">Politeknik Negeri Manado — Semester {selectedSemester}</p>
           <hr className="mt-4 border-2 border-black" />
         </div>
 
-        <div className="flex justify-between items-center print:hidden">
+        {/* Toolbar: judul + dropdown + tombol unduh */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
           <div>
             <h3 className="text-lg font-bold text-gray-900">Data Pendaftaran Lunas</h3>
-            <p className="text-xs text-gray-500 mt-1">Menampilkan mahasiswa yang telah menyelesaikan administrasi</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+              <p className="text-xs font-black text-blue-600 uppercase tracking-wide">
+                Periode Aktif: Semester {selectedSemester}
+              </p>
+            </div>
           </div>
-          <button 
-            onClick={handleDownloadPDF}
-            className="flex items-center gap-2 rounded-xl bg-red-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-red-600/30 hover:bg-red-700 hover:shadow-red-700/40 active:scale-95 transition-all"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Unduh PDF
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Dropdown Pilihan Semester */}
+            <select
+              value={selectedSemester}
+              onChange={e => setSelectedSemester(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-gray-50 py-2.5 px-4 text-xs font-black text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all uppercase tracking-wider"
+            >
+              {semesterOptions.map(opt => (
+                <option key={opt} value={opt}>
+                  Semester {opt}
+                </option>
+              ))}
+            </select>
+
+            <button 
+              onClick={handleDownloadPDF}
+              className="flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-red-600/30 hover:bg-red-700 active:scale-95 transition-all"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Unduh PDF
+            </button>
+          </div>
+        </div>
+
+        {/* Stats badge */}
+        <div className="flex items-center gap-3 print:hidden">
+          <span className="rounded-full bg-blue-50 border border-blue-100 px-4 py-1.5 text-[10px] font-black text-blue-700 uppercase tracking-widest">
+            {reportData.length} Mahasiswa
+          </span>
+          <span className="rounded-full bg-green-50 border border-green-100 px-4 py-1.5 text-[10px] font-black text-green-700 uppercase tracking-widest">
+            Status: Approved
+          </span>
         </div>
 
         {/* Mobile View: Cards (Hidden on print) */}
@@ -110,7 +233,7 @@ export default function LaporanSemesterPage() {
             })
           ) : (
             <div className="py-10 text-center font-bold text-gray-400 uppercase tracking-widest bg-white rounded-2xl border border-gray-50">
-              Belum ada data yang disetujui.
+              Belum ada data untuk semester ini.
             </div>
           )}
         </div>
@@ -153,12 +276,19 @@ export default function LaporanSemesterPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center font-bold text-gray-400 uppercase tracking-widest">Belum ada data yang disetujui.</td>
+                    <td colSpan={6} className="py-10 text-center font-bold text-gray-400 uppercase tracking-widest">Belum ada data untuk semester ini.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          {!loading && (
+            <div className="border-t border-gray-50 bg-gray-50/50 px-6 py-4 print:hidden">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                Total: {reportData.length} Mahasiswa — Semester {selectedSemester}
+              </p>
+            </div>
+          )}
         </div>
 
       </div>
