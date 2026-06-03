@@ -13,12 +13,12 @@ export default function PendaftaranPage() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   
-  // New States for Course, SKS, and Payment
+  // States for Course, SKS, and Payment
   const [mataKuliahList, setMataKuliahList] = useState<any[]>([]);
-  const [selectedMk, setSelectedMk] = useState<string>('');
-  const [sks, setSks] = useState<number>(0);
+  const [selectedCourses, setSelectedCourses] = useState<{mkId: string; alasan: string}[]>([
+    { mkId: '', alasan: 'Mengulang (Nilai D/E)' }
+  ]);
   const [totalPembayaran, setTotalPembayaran] = useState<number>(0);
-  const [alasan, setAlasan] = useState<string>('Mengulang (Nilai D/E)');
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -45,26 +45,39 @@ export default function PendaftaranPage() {
     fetchMataKuliah();
   }, []);
 
-  const handleMkChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const mkId = e.target.value;
-    setSelectedMk(mkId);
-    
-    const foundMk = mataKuliahList.find(mk => mk.id === mkId);
-    if (foundMk) {
-      setSks(foundMk.sks);
-      // Prefill with suggested cost (e.g. 150000 per SKS)
-      setTotalPembayaran(foundMk.sks * 150000);
-    } else {
-      setSks(0);
-      setTotalPembayaran(0);
+  const handleAddCourse = () => {
+    setSelectedCourses([...selectedCourses, { mkId: '', alasan: 'Mengulang (Nilai D/E)' }]);
+  };
+
+  const handleRemoveCourse = (index: number) => {
+    if (selectedCourses.length > 1) {
+      const newCourses = [...selectedCourses];
+      newCourses.splice(index, 1);
+      setSelectedCourses(newCourses);
     }
   };
 
+  const handleCourseChange = (index: number, field: 'mkId' | 'alasan', value: string) => {
+    const newCourses = [...selectedCourses];
+    newCourses[index][field] = value;
+    setSelectedCourses(newCourses);
+  };
+
+  const totalSks = selectedCourses.reduce((sum, course) => {
+    const foundMk = mataKuliahList.find(mk => mk.id === course.mkId);
+    return sum + (foundMk ? foundMk.sks : 0);
+  }, 0);
+
+  useEffect(() => {
+    setTotalPembayaran(totalSks * 150000);
+  }, [totalSks]);
+
   const handleSubmit = async () => {
-    if (!selectedMk) {
+    const validCourses = selectedCourses.filter(course => course.mkId !== '');
+    if (validCourses.length === 0) {
       Swal.fire({
         title: 'Informasi',
-        text: 'Harap pilih mata kuliah terlebih dahulu!',
+        text: 'Harap pilih minimal satu mata kuliah terlebih dahulu!',
         icon: 'warning',
         confirmButtonColor: '#1A365D'
       });
@@ -120,13 +133,15 @@ export default function PendaftaranPage() {
       if (pendaftaranError) throw pendaftaranError;
 
       // 3. Simpan detail item pendaftaran ke tabel pendaftaran_items
+      const itemsToInsert = validCourses.map(course => ({
+        pendaftaran_id: pendaftaran.id,
+        mk_id: course.mkId,
+        nilai_lama: course.alasan
+      }));
+
       const { error: itemError } = await supabase
         .from('pendaftaran_items')
-        .insert({
-          pendaftaran_id: pendaftaran.id,
-          mk_id: selectedMk,
-          nilai_lama: alasan // Alasan Pengambilan terisi otomatis ke kolom nilai_lama
-        });
+        .insert(itemsToInsert);
 
       if (itemError) throw itemError;
 
@@ -177,92 +192,134 @@ export default function PendaftaranPage() {
 
             <div className="flex flex-col gap-6 w-full min-w-0">
               {/* Form Input Mata Kuliah, SKS, dan Total Pembayaran */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 rounded-2xl bg-gray-50/50 border border-gray-100">
-                {/* Mata Kuliah Field */}
-                <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="text-xs font-black text-[#1A365D] uppercase tracking-widest ml-1">
-                    Mata Kuliah Yang Diambil <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <select
-                      required
-                      value={selectedMk}
-                      onChange={handleMkChange}
-                      className="w-full rounded-xl bg-white border border-gray-200 px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none shadow-sm"
-                    >
-                      <option value="">Pilih Mata Kuliah...</option>
-                      {mataKuliahList.map((mk) => (
-                        <option key={mk.id} value={mk.id}>
-                          {mk.kode_mk} - {mk.nama_mk}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                      </svg>
+              <div className="flex flex-col gap-6 p-6 rounded-2xl bg-gray-50/50 border border-gray-100">
+                {selectedCourses.map((course, index) => {
+                  const foundMk = mataKuliahList.find(mk => mk.id === course.mkId);
+                  const sks = foundMk ? foundMk.sks : 0;
+                  
+                  return (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 pb-6 border-b border-gray-200 last:border-0 last:pb-0">
+                      {/* Header with Remove button if > 1 */}
+                      <div className="md:col-span-12 flex justify-between items-center">
+                        <h4 className="text-sm font-bold text-[#1A365D]">Mata Kuliah #{index + 1}</h4>
+                        {selectedCourses.length > 1 && (
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveCourse(index)}
+                            className="text-xs font-bold text-red-500 hover:text-red-700"
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Mata Kuliah Field */}
+                      <div className="flex flex-col gap-2 md:col-span-7">
+                        <label className="text-[10px] font-black text-[#1A365D] uppercase tracking-widest ml-1">
+                          Mata Kuliah <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <select
+                            required
+                            value={course.mkId}
+                            onChange={(e) => handleCourseChange(index, 'mkId', e.target.value)}
+                            className="w-full rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none shadow-sm"
+                          >
+                            <option value="">Pilih Mata Kuliah...</option>
+                            {mataKuliahList.map((mk) => (
+                              <option key={mk.id} value={mk.id}>
+                                {mk.kode_mk} - {mk.nama_mk}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                              <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SKS Field */}
+                      <div className="flex flex-col gap-2 md:col-span-2">
+                        <label className="text-[10px] font-black text-[#1A365D] uppercase tracking-widest ml-1">
+                          SKS
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={sks ? `${sks} SKS` : '-'}
+                          className="w-full rounded-xl bg-gray-100 border border-gray-200 px-4 py-3 text-sm font-black text-gray-500 outline-none cursor-not-allowed shadow-sm text-center"
+                        />
+                      </div>
+
+                      {/* Alasan Pengambilan Field */}
+                      <div className="flex flex-col gap-2 md:col-span-3">
+                        <label className="text-[10px] font-black text-[#1A365D] uppercase tracking-widest ml-1">
+                          Alasan <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <select
+                            required
+                            value={course.alasan}
+                            onChange={(e) => handleCourseChange(index, 'alasan', e.target.value)}
+                            className="w-full rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none shadow-sm"
+                          >
+                            <option>Mengulang (Nilai D/E)</option>
+                            <option>Perbaikan Nilai (C)</option>
+                            <option>Akselerasi (Maju)</option>
+                          </select>
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                              <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                <button
+                  type="button"
+                  onClick={handleAddCourse}
+                  className="w-full py-3 border-2 border-dashed border-blue-300 rounded-xl text-blue-600 font-bold text-sm hover:bg-blue-50 transition-colors"
+                >
+                  + Tambah Mata Kuliah
+                </button>
+
+                {/* Total SKS and Total Pembayaran Area */}
+                <div className="pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Total SKS Information */}
+                  <div className="flex items-center">
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 w-full">
+                      <p className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Total SKS Diambil</p>
+                      <p className="text-2xl font-black text-[#1A365D]">{totalSks} SKS</p>
                     </div>
                   </div>
-                </div>
 
-                {/* SKS Field */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-black text-[#1A365D] uppercase tracking-widest ml-1">
-                    Beban SKS
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={sks ? `${sks} SKS` : '-'}
-                    className="w-full rounded-xl bg-gray-100 border border-gray-200 px-5 py-4 text-sm font-black text-gray-500 outline-none cursor-not-allowed shadow-sm text-center"
-                  />
-                </div>
-
-                {/* Alasan Pengambilan Field */}
-                <div className="flex flex-col gap-2 md:col-span-3">
-                  <label className="text-xs font-black text-[#1A365D] uppercase tracking-widest ml-1">
-                    Alasan Pengambilan <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <select
-                      required
-                      value={alasan}
-                      onChange={(e) => setAlasan(e.target.value)}
-                      className="w-full rounded-xl bg-white border border-gray-200 px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none shadow-sm"
-                    >
-                      <option>Mengulang (Nilai D/E)</option>
-                      <option>Perbaikan Nilai (C)</option>
-                      <option>Akselerasi (Maju)</option>
-                    </select>
-                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                      </svg>
+                  {/* Total Pembayaran Field */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-black text-[#1A365D] uppercase tracking-widest ml-1">
+                      Total Pembayaran (Rp) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative group">
+                      <input
+                        type="number"
+                        required
+                        value={totalPembayaran || ''}
+                        onChange={(e) => setTotalPembayaran(Number(e.target.value))}
+                        placeholder="Masukkan total nominal transfer..."
+                        className="w-full rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                      />
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-xs font-black text-blue-600 tracking-wider">
+                        IDR
+                      </div>
                     </div>
+                    <p className="text-[9px] font-semibold text-gray-400 ml-1">
+                      *Biaya disarankan: Rp150.000/SKS. Anda dapat mengubah nominal jika terdapat beasiswa/potongan.
+                    </p>
                   </div>
-                </div>
-
-                {/* Total Pembayaran Field */}
-                <div className="flex flex-col gap-2 md:col-span-3">
-                  <label className="text-xs font-black text-[#1A365D] uppercase tracking-widest ml-1">
-                    Total Pembayaran (Rp) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative group">
-                    <input
-                      type="number"
-                      required
-                      value={totalPembayaran || ''}
-                      onChange={(e) => setTotalPembayaran(Number(e.target.value))}
-                      placeholder="Masukkan total nominal transfer..."
-                      className="w-full rounded-xl bg-white border border-gray-200 px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
-                    />
-                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-xs font-black text-blue-600 tracking-wider">
-                      IDR
-                    </div>
-                  </div>
-                  <p className="text-[10px] font-semibold text-gray-400 ml-1">
-                    *Biaya disarankan: Rp150.000,- per SKS. Anda dapat mengubah nominal jika terdapat beasiswa/potongan.
-                  </p>
                 </div>
               </div>
 
