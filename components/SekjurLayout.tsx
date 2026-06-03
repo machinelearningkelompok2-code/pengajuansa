@@ -51,7 +51,7 @@ export default function SekjurLayout({ children, topbarTitle }: SekjurLayoutProp
           onMenuToggle={() => setIsMobileMenuOpen((prev) => !prev)}
           isMobileMenuOpen={isMobileMenuOpen}
         />
-        <main className="flex-grow overflow-y-auto p-4 md:p-8">
+        <main className="flex-grow overflow-y-auto flex flex-col p-4 md:p-8">
           {children}
         </main>
 
