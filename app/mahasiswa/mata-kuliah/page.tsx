@@ -6,10 +6,35 @@ import { ClockIcon } from '../../../components/icons';
 import { supabase } from '../../../supabase/lib/supabase';
 import Swal from 'sweetalert2';
 
+// Helper: hitung periode semester aktif berdasarkan tanggal realtime
+function getCurrentSemesterPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  // Semester Genap: Januari - Juni
+  // Semester Ganjil: Juli - Desember
+  if (month >= 1 && month <= 6) {
+    return {
+      label: `Genap ${year - 1}/${year}`,
+      start: new Date(year, 0, 1), // 1 Jan
+      end: new Date(year, 5, 30, 23, 59, 59), // 30 Jun
+    };
+  } else {
+    return {
+      label: `Ganjil ${year}/${year + 1}`,
+      start: new Date(year, 6, 1), // 1 Jul
+      end: new Date(year, 11, 31, 23, 59, 59), // 31 Des
+    };
+  }
+}
+
 export default function MataKuliahPage() {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  
+  const semesterPeriod = getCurrentSemesterPeriod();
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -23,12 +48,14 @@ export default function MataKuliahPage() {
   const fetchCourses = async (userId: string) => {
     setLoading(true);
 
-    // 1. Ambil SEMUA pendaftaran aktif
+    // 1. Ambil pendaftaran aktif pada semester berjalan
     const { data: pendaftarans } = await supabase
       .from('pendaftaran_sa')
       .select('id')
       .eq('mahasiswa_id', userId)
-      .eq('status', 'Approved');
+      .eq('status', 'Approved')
+      .gte('created_at', semesterPeriod.start.toISOString())
+      .lte('created_at', semesterPeriod.end.toISOString());
 
     if (pendaftarans && pendaftarans.length > 0) {
       const pIds = pendaftarans.map(p => p.id);
@@ -95,7 +122,11 @@ export default function MataKuliahPage() {
         <div className="relative overflow-hidden rounded-[2rem] md:rounded-[2.5rem] bg-[#0B2559] p-8 md:p-12 text-white shadow-2xl">
           <div className="relative z-10 max-w-2xl">
             <h1 className="mb-3 text-2xl md:text-4xl font-black tracking-tight leading-tight">Data Mata Kuliah <br />Semester Antara</h1>
-            <p className="mb-6 md:mb-8 text-xs md:text-sm text-blue-200 font-medium">Berikut adalah daftar lengkap Mata Kuliah yang telah disetujui beserta alokasi dosen pengampunya.</p>
+            <p className="mb-4 text-xs md:text-sm text-blue-200 font-medium">Berikut adalah daftar lengkap Mata Kuliah yang telah disetujui beserta alokasi dosen pengampunya.</p>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 border border-white/20 backdrop-blur-md">
+              <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-[10px] font-black text-white uppercase tracking-widest">Periode Aktif: Semester {semesterPeriod.label}</span>
+            </div>
           </div>
           <div className="absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-white/5 blur-3xl"></div>
         </div>
